@@ -7,16 +7,13 @@ import {
   Target, 
   Clock, 
   ArrowRight, 
-  BarChart3,
   CheckCircle,
   AlertCircle,
-  BookOpen,
   Brain,
-  Calendar,
   Star
 } from 'lucide-react';
 import { PageType } from '../App';
-import RadarChart from './RadarChart';
+import PerformanceTrendChart from './PerformanceTrendChart';
 
 interface DashboardProps {
   onNavigate: (page: PageType) => void;
@@ -25,11 +22,30 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   // Mock data - in real app this would come from API
   const userStats = {
-    profileStrength: 78,
-    interviewsTaken: 12,
-    assessmentsCompleted: 8,
-    bestScore: 84
+    aptitudeScore: 81, // Latest aptitude test score
+    interviewScore: 76, // Latest interview score
+    overallPerformance: 78, // Average score across all tests
+    completedSessions: 20 // Total interviews + aptitude tests
   };
+
+  // Performance trend data (same as in PerformanceTrendChart)
+  const performanceData = [
+    { date: '2024-01-08', overallScore: 75, sessionNumber: 1 },
+    { date: '2024-01-15', overallScore: 65, sessionNumber: 2 },
+    { date: '2024-01-18', overallScore: 88, sessionNumber: 3 },
+    { date: '2024-02-22', overallScore: 71, sessionNumber: 4 },
+    { date: '2024-03-25', overallScore: 54, sessionNumber: 5 },
+    { date: '2024-06-28', overallScore: 76, sessionNumber: 6 },
+    { date: '2024-07-01', overallScore: 78, sessionNumber: 7 },
+    { date: '2024-08-05', overallScore: 90, sessionNumber: 8 },
+  ];
+
+  // Calculate performance stats
+  const lastScore = performanceData[performanceData.length - 1]?.overallScore || 0;
+  const previousScore = performanceData[performanceData.length - 2]?.overallScore || 0;
+  const highestScore = Math.max(...performanceData.map(d => d.overallScore));
+  const scoreChange = lastScore - previousScore;
+  const isImprovement = scoreChange > 0;
 
   const mlEvaluation = {
     overallScore: 76,
@@ -38,14 +54,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     feedback: "You showed strong technical skills but hesitated during behavioral questions. Practice speaking with more confidence."
   };
 
-  const progressData = [
-    { name: 'Mock Interview 1', score: 65, date: '2024-01-15' },
-    { name: 'Logic Test', score: 72, date: '2024-01-18' },
-    { name: 'Mock Interview 2', score: 68, date: '2024-01-22' },
-    { name: 'Technical Quiz', score: 81, date: '2024-01-25' },
-    { name: 'Mock Interview 3', score: 76, date: '2024-01-28' },
-  ];
-
   const recentActivities = [
     { date: 'Jan 28', activity: 'Mock Interview', score: 76, type: 'interview' },
     { date: 'Jan 25', activity: 'Technical Quiz', score: 81, type: 'test' },
@@ -53,24 +61,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     { date: 'Jan 18', activity: 'Logic Test', score: 72, type: 'test' },
   ];
 
-  const radarData = [
-    { label: 'Fluency', value: 82 },
-    { label: 'Grammar', value: 78 },
-    { label: 'Confidence', value: 75 },
-    { label: 'Technical Knowledge', value: 85 },
-    { label: 'Vocabulary', value: 80 }
-  ];
-
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
     if (score >= 60) return 'text-yellow-600';
     return 'text-red-600';
-  };
-
-  const getScoreBackground = (score: number) => {
-    if (score >= 80) return 'bg-green-500';
-    if (score >= 60) return 'bg-yellow-500';
-    return 'bg-red-500';
   };
 
   return (
@@ -88,14 +82,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-2 bg-gray-100 rounded-lg">
-                  <Target className="h-6 w-6 text-black" />
+                  <Brain className="h-6 w-6 text-black" />
                 </div>
-                <span className={`text-2xl font-bold ${getScoreColor(userStats.profileStrength)}`}>
-                  {userStats.profileStrength}%
+                <span className={`text-2xl font-bold ${getScoreColor(userStats.aptitudeScore)}`}>
+                  {userStats.aptitudeScore}%
                 </span>
               </div>
-              <h3 className="font-semibold text-black">Profile Strength</h3>
-              <p className="text-sm text-gray-600">Based on your performance</p>
+              <h3 className="font-semibold text-black">Aptitude Score</h3>
+              <p className="text-sm text-gray-600">Latest test result</p>
             </div>
 
             <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -103,21 +97,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div className="p-2 bg-gray-100 rounded-lg">
                   <Video className="h-6 w-6 text-black" />
                 </div>
-                <span className="text-2xl font-bold text-black">{userStats.interviewsTaken}</span>
+                <span className={`text-2xl font-bold ${getScoreColor(userStats.interviewScore)}`}>
+                  {userStats.interviewScore}%
+                </span>
               </div>
-              <h3 className="font-semibold text-black">Interviews Taken</h3>
-              <p className="text-sm text-gray-600">Mock interviews completed</p>
+              <h3 className="font-semibold text-black">Interview Score</h3>
+              <p className="text-sm text-gray-600">Latest interview result</p>
             </div>
 
             <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-2 bg-gray-100 rounded-lg">
-                  <FileText className="h-6 w-6 text-black" />
+                  <TrendingUp className="h-6 w-6 text-black" />
                 </div>
-                <span className="text-2xl font-bold text-black">{userStats.assessmentsCompleted}</span>
+                <span className={`text-2xl font-bold ${getScoreColor(userStats.overallPerformance)}`}>
+                  {userStats.overallPerformance}%
+                </span>
               </div>
-              <h3 className="font-semibold text-black">Assessments Completed</h3>
-              <p className="text-sm text-gray-600">Tests and quizzes</p>
+              <h3 className="font-semibold text-black">Overall Performance</h3>
+              <p className="text-sm text-gray-600">Average across all tests</p>
             </div>
 
             <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -125,18 +123,63 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div className="p-2 bg-gray-100 rounded-lg">
                   <Award className="h-6 w-6 text-black" />
                 </div>
-                <span className={`text-2xl font-bold ${getScoreColor(userStats.bestScore)}`}>
-                  {userStats.bestScore}/100
-                </span>
+                <span className="text-2xl font-bold text-black">{userStats.completedSessions}</span>
               </div>
-              <h3 className="font-semibold text-black">Best Score</h3>
-              <p className="text-sm text-gray-600">Your highest achievement</p>
+              <h3 className="font-semibold text-black">Completed Sessions</h3>
+              <p className="text-sm text-gray-600">Interviews & aptitude tests</p>
             </div>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Left Column */}
             <div className="lg:col-span-2 space-y-8">
+              {/* Performance Trend Chart */}
+              <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center space-x-2">
+                    <TrendingUp className="h-6 w-6 text-black" />
+                    <h2 className="text-xl font-bold">Performance Trend</h2>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Overall Score (Aptitude + Interview)
+                  </div>
+                </div>
+                <PerformanceTrendChart data={performanceData} />
+                
+                {/* Performance Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-gray-200">
+                  <div className="text-center">
+                    <div className={`text-2xl font-bold mb-1 ${getScoreColor(lastScore)}`}>
+                      {lastScore}%
+                    </div>
+                    <div className="text-sm text-gray-600">Last Recorded</div>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className={`text-2xl font-bold mb-1 ${getScoreColor(highestScore)}`}>
+                      {highestScore}%
+                    </div>
+                    <div className="text-sm text-gray-600">Highest Score</div>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="flex items-center justify-center space-x-1 mb-1">
+                      <span className={`text-2xl font-bold ${isImprovement ? 'text-green-600' : scoreChange < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                        {isImprovement ? '+' : ''}{scoreChange}%
+                      </span>
+                      {scoreChange !== 0 && (
+                        <TrendingUp 
+                          className={`h-5 w-5 ${isImprovement ? 'text-green-600' : 'text-red-600 rotate-180'}`}
+                        />
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {scoreChange > 0 ? 'Improvement' : scoreChange < 0 ? 'Decrease' : 'No Change'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* ML Evaluation Summary */}
               <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
                 <div className="flex items-center space-x-2 mb-6">
@@ -190,33 +233,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
             {/* Right Column */}
             <div className="space-y-8">
-              {/* Skills Radar Chart */}
-              <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
-                  <Target className="h-5 w-5 text-black" />
-                  <h3 className="text-lg font-bold text-black">Skills Radar</h3>
-                </div>
-                
-                <div className="flex justify-center mb-4">
-                  <RadarChart data={radarData} size={200} showLabels={false} />
-                </div>
-                
-                <div className="grid grid-cols-1 gap-2 text-xs">
-                  {radarData.map((skill, index) => (
-                    <div key={index} className="flex justify-between items-center">
-                      <span className="text-gray-600">{skill.label}</span>
-                      <span className={`font-semibold ${getScoreColor(skill.value)}`}>{skill.value}%</span>
-                    </div>
-                  ))}
-                </div>
-                
-                <button
-                  onClick={() => onNavigate('profile')}
-                  className="w-full mt-4 text-center text-sm text-gray-600 hover:text-black transition-colors"
-                >
-                  View detailed breakdown →
-                </button>
-              </div>
 
               {/* Smart Recommendations */}
               <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -247,33 +263,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                       Begin Interview
                     </button>
                   </div>
-
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <h4 className="font-semibold text-black mb-2">Study Resources</h4>
-                    <p className="text-sm text-gray-600 mb-3">Common behavioral questions guide</p>
-                    <button className="border border-black text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
-                      View Resources
-                    </button>
-                  </div>
                 </div>
-              </div>
-
-              {/* What's Next Assistant */}
-              <div className="bg-black text-white rounded-xl p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Brain className="h-6 w-6" />
-                  <h3 className="text-lg font-bold">What's Next?</h3>
-                </div>
-                <p className="text-gray-300 mb-4">
-                  Based on your performance, we recommend taking the Technical Quiz to strengthen your coding skills.
-                </p>
-                <button 
-                  onClick={() => onNavigate('aptitude')}
-                  className="bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors flex items-center space-x-2"
-                >
-                  <span>Take Technical Quiz</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
               </div>
 
               {/* Activity History */}
@@ -306,7 +296,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
 
                 <button 
-                  onClick={() => onNavigate('profile')}
+                  onClick={() => onNavigate('history')}
                   className="w-full mt-4 text-center text-sm text-gray-600 hover:text-black transition-colors"
                 >
                   View All Activity

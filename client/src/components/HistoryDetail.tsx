@@ -346,24 +346,6 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
     { area: 'Technical Depth', severity: 'high', description: 'Need more detailed technical examples' },
   ];
 
-  const suggestions = [
-    {
-      title: 'Practice Technical Scenarios',
-      description: 'Work on more complex technical problems and be prepared to explain your approach step by step.',
-      action: 'Take more practice interviews'
-    },
-    {
-      title: 'Improve Communication Skills',
-      description: 'Practice speaking clearly and confidently. Consider recording yourself to identify areas for improvement.',
-      action: 'Join communication workshops'
-    },
-    {
-      title: 'Expand Technical Knowledge',
-      description: 'Deepen your understanding of advanced concepts in your field. Focus on practical applications.',
-      action: 'Study advanced topics'
-    }
-  ];
-
   const radarData = [
     { label: 'Fluency', value: 78 },
     { label: 'Grammar', value: 75 },
@@ -481,74 +463,61 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
             </div>
           </div>
 
-          {/* Suggestions */}
-          <div className="mt-8 bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">
-            <div className="flex items-center space-x-2 mb-6">
-              <TrendingUp className="h-6 w-6 text-black" />
-              <h2 className="text-2xl font-bold">Personalized Suggestions</h2>
-            </div>
-            
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {suggestions.map((suggestion, index) => (
-                <div key={index} className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-                  <h3 className="font-semibold mb-3 text-black">{suggestion.title}</h3>
-                  <p className="text-gray-600 text-sm mb-4">{suggestion.description}</p>
-                  <button className="text-black text-sm hover:text-gray-700 transition-colors font-medium">
-                    {suggestion.action} →
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Detailed Analytics */}
           <div className="mt-8 bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">
             <div className="flex items-center space-x-2 mb-6">
               <BarChart3 className="h-6 w-6 text-black" />
-              <h2 className="text-2xl font-bold">Detailed Analytics</h2>
+              <h2 className="text-2xl font-bold">Aptitude Analytics</h2>
             </div>
             
             <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <h3 className="font-semibold mb-4">Performance Breakdown</h3>
+                <h3 className="font-semibold mb-4">Subject Performance</h3>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Response Time</span>
-                    <span className="text-green-600">Excellent</span>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Logical Reasoning</span>
+                    <span className="text-green-600 font-medium">85%</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Answer Completeness</span>
-                    <span className="text-yellow-600">Good</span>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Quantitative Aptitude</span>
+                    <span className="text-yellow-600 font-medium">72%</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Technical Accuracy</span>
-                    <span className="text-green-600">Very Good</span>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Verbal Ability</span>
+                    <span className="text-green-600 font-medium">78%</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Communication Style</span>
-                    <span className="text-yellow-600">Needs Work</span>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Technical Knowledge</span>
+                    <span className="text-green-600 font-medium">82%</span>
                   </div>
                 </div>
               </div>
               
               <div>
-                <h3 className="font-semibold mb-4">Compared to Others</h3>
+                <h3 className="font-semibold mb-4">Aptitude Insights</h3>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Overall Rank</span>
-                    <span className="text-green-600">Top 25%</span>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center mb-1">
+                      <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
+                      <span className="font-medium text-green-800">Strong Logical Thinking</span>
+                    </div>
+                    <p className="text-sm text-green-700">Excellent performance in logical reasoning shows strong analytical skills.</p>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Technical Skills</span>
-                    <span className="text-green-600">Top 20%</span>
+                  
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <div className="flex items-center mb-1">
+                      <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
+                      <span className="font-medium text-yellow-800">Math Skills Need Work</span>
+                    </div>
+                    <p className="text-sm text-yellow-700">Focus on quantitative problems and practice speed calculation techniques.</p>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Communication</span>
-                    <span className="text-yellow-600">Top 40%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Problem Solving</span>
-                    <span className="text-green-600">Top 30%</span>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-center mb-1">
+                      <Target className="h-4 w-4 text-blue-600 mr-2" />
+                      <span className="font-medium text-blue-800">Well-Rounded Profile</span>
+                    </div>
+                    <p className="text-sm text-blue-700">Good balance across verbal and technical areas. Ready for most interview challenges.</p>
                   </div>
                 </div>
               </div>
@@ -615,5 +584,4 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
     </div>
   );
 };
-
 export default HistoryDetail;

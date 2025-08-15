@@ -177,6 +177,11 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({ onNavigate, setInterviewS
     localStorage.setItem('hiresight_history', JSON.stringify(historyItems));
     
     setIsCompleted(true);
+    
+    // Navigate to feedback page after 2 seconds
+    setTimeout(() => {
+      onNavigate('feedback');
+    }, 2000);
   };
 
   const getStatusText = () => {
@@ -288,17 +293,16 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({ onNavigate, setInterviewS
         <div className="text-center max-w-md mx-auto px-6">
           <div className="bg-white border-2 border-gray-200 rounded-xl p-8 shadow-lg">
             <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="text-2xl">✓</span>
+              <span className="text-2xl text-white">✓</span>
             </div>
             <h2 className="text-3xl font-bold mb-4">Interview Completed!</h2>
             <p className="text-gray-600 mb-6">Duration: {formatTime(timeElapsed)}</p>
-            <button
-              onClick={() => onNavigate('dashboard')}
-              className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded-lg font-semibold flex items-center space-x-2 mx-auto transition-all duration-200"
-            >
-              <span>View Feedback</span>
-              <ArrowRight className="h-5 w-5" />
-            </button>
+            <div className="text-sm text-gray-500 mb-4">
+              Preparing your feedback...
+            </div>
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -307,189 +311,204 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({ onNavigate, setInterviewS
 
   // Main Interview Interface
   return (
-    <div className="min-h-screen flex pt-16">
-      {/* Left Panel - Video Background */}
-      <div className="w-1/2 bg-black flex flex-col justify-between p-12 relative overflow-hidden">
-        {/* Background Video */}
-        <video
-          ref={setVideoRef}
-          src="/202508.mp4"
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full"
-          style={{ zIndex: 1 }}
-          onEnded={handleVideoEnded}
-        >
-        </video>
-        <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-3 py-2 rounded text-lg z-10">
-                Sara (AI Interviewer)
-              </div>
-        
-        {/* Dark overlay for better text readability */}
-        <div className="absolute inset-0" style={{ zIndex: 2 }}></div>
-        
-        {/* Timer */}
-        {interviewStarted && (
-          <div className="absolute top-8 right-8 text-white text-lg font-semibold" style={{ zIndex: 3 }}>
-            {formatTime(timeElapsed)}
-          </div>
-        )}
-        
-        {/* Content Container */}
-        <div className="relative flex flex-col justify-between h-full" style={{ zIndex: 3 }}>
-          {/* Title */}
-          <div className="flex-1 flex flex-col justify-center items-center text-center">
-            {!interviewStarted && (
-              <>
-                <h1 className="text-5xl font-bold text-white mb-4">Live Interview</h1>
-                <p className="text-gray-200 text-xl">AI-Powered Interview Experience</p>
-              </>
-            )}
+    <div className="h-screen flex flex-col pt-16">
+      <div className="flex-1 flex flex-col md:flex-row">
+        {/* Left Panel - Video Background (AI Interviewer) */}
+        <div className="w-full md:w-1/2 h-1/2 md:h-full bg-black flex flex-col justify-between p-3 md:p-12 relative overflow-hidden">
+          {/* Background Video */}
+          <video
+            ref={setVideoRef}
+            src="/202508.mp4"
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full"
+            style={{ zIndex: 1 }}
+            onEnded={handleVideoEnded}
+          >
+          </video>
+          <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 bg-black bg-opacity-50 text-white px-2 md:px-3 py-1 md:py-2 rounded text-xs md:text-lg z-10">
+            Sara (AI Interviewer)
           </div>
           
-          {/* Question Box - only show if interview started */}
+          {/* Dark overlay for better text readability */}
+          <div className="absolute inset-0 bg-black bg-opacity-20" style={{ zIndex: 2 }}></div>
+          
+          {/* Timer */}
           {interviewStarted && (
-            <div className="w-full">
-              <div className="bg-white bg-opacity-95 backdrop-blur-sm rounded-2xl p-8 shadow-lg">
-                <p className="text-black text-xl leading-relaxed">
-                  {isProcessingResponse ? "Let me think about your response..." : questions[currentQuestion]}
-                </p>
-                {isProcessingResponse && (
-                  <div className="mt-4 flex justify-center">
-                    <div className="flex space-x-1">
-                      {[...Array(3)].map((_, i) => (
-                        <div
-                          key={i}
-                          className="w-2 h-2 bg-black rounded-full animate-bounce"
-                          style={{ animationDelay: `${i * 0.2}s` }}
-                        />
-                      ))}
+            <div className="absolute top-2 md:top-8 right-2 md:right-8 text-white text-sm md:text-lg font-semibold" style={{ zIndex: 3 }}>
+              {formatTime(timeElapsed)}
+            </div>
+          )}
+          
+          {/* Content Container */}
+          <div className="relative flex flex-col justify-between h-full" style={{ zIndex: 3 }}>
+            {/* Title */}
+            <div className="flex-1 flex flex-col justify-center items-center text-center">
+              {!interviewStarted && (
+                <>
+                  <h1 className="text-2xl md:text-5xl font-bold text-white mb-1 md:mb-4">Live Interview</h1>
+                  <p className="text-gray-200 text-sm md:text-xl">AI-Powered Interview Experience</p>
+                </>
+              )}
+            </div>
+            
+            {/* Question Box - only show if interview started */}
+            {interviewStarted && (
+              <div className="w-full px-2 md:px-0">
+                <div className="bg-white bg-opacity-95 backdrop-blur-sm rounded-lg md:rounded-2xl p-3 md:p-8 shadow-lg">
+                  <p className="text-black text-sm md:text-xl leading-relaxed">
+                    {isProcessingResponse ? "Let me think about your response..." : questions[currentQuestion]}
+                  </p>
+                  {isProcessingResponse && (
+                    <div className="mt-2 md:mt-4 flex justify-center">
+                      <div className="flex space-x-1">
+                        {[...Array(3)].map((_, i) => (
+                          <div
+                            key={i}
+                            className="w-1 h-1 md:w-2 md:h-2 bg-black rounded-full animate-bounce"
+                            style={{ animationDelay: `${i * 0.2}s` }}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel - User Interface (User Video) */}
+        <div className="w-full md:w-1/2 h-1/2 md:h-full bg-white flex flex-col relative overflow-hidden">
+          {/* Progress Indicator - only show if interview started */}
+          {interviewStarted && (
+            <div className="absolute top-2 md:top-8 left-2 md:left-8 text-white md:text-black z-20 bg-black bg-opacity-60 md:bg-transparent rounded px-2 py-1 md:p-0">
+              <div className="text-xs md:text-sm text-white md:text-gray-600">Question {currentQuestion + 1} of {questions.length}</div>
+              <div className="w-20 md:w-32 bg-gray-300 md:bg-gray-200 rounded-full h-1 md:h-2 mt-1 md:mt-2">
+                <div 
+                  className="bg-white md:bg-black h-1 md:h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
+                />
               </div>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Right Panel - User Interface (White Background) */}
-      <div className="w-1/2 bg-white flex flex-col relative overflow-hidden">
-        {/* Progress Indicator - only show if interview started */}
-        {interviewStarted && (
-          <div className="absolute top-8 left-8 text-black z-10">
-            <div className="text-sm text-gray-600">Question {currentQuestion + 1} of {questions.length}</div>
-            <div className="w-32 bg-gray-200 rounded-full h-2 mt-2">
-              <div 
-                className="bg-black h-2 rounded-full transition-all duration-300"
-                style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-        
-        {!interviewStarted ? (
-          /* Pre-Interview Start Screen */
-          <div className="flex-1 flex items-center justify-center p-12">
-            <div className="text-center">
-              <div className="mb-8">
-                <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center mx-auto mb-6">
-                  <span className="text-white text-3xl">🎥</span>
-                </div>
-                <h2 className="text-3xl font-bold mb-4">Ready to Start?</h2>
-                <p className="text-gray-600 mb-8 max-w-md">
-                  We'll need access to your camera and microphone for this interview. 
-                  Click the button below to grant permissions and begin.
-                </p>
-              </div>
-              
-              <button
-                onClick={startInterview}
-                className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded-lg font-semibold flex items-center space-x-2 mx-auto transition-all duration-200"
-              >
-                <span>Start Interview</span>
-                <ArrowRight className="h-5 w-5" />
-              </button>
-              
-              <div className="mt-8 text-sm text-gray-500 ">
-                <p>• Make sure you're in a quiet environment</p>
-                <p>• Ensure good lighting on your face</p>
-                <p>• Check your internet connection</p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Interview Interface */
-          <>
-            {/* User Video - Full Panel */}
-            <div className="relative flex-1">
-              <video
-                ref={setUserVideoRef}
-                autoPlay
-                muted
-                playsInline
-                className="absolute inset-0 w-full h-full object-cover"
-              >
-              </video>
-              <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-3 py-2 rounded text-lg z-10">
-                You
-              </div>
-            </div>
-            
-            {/* Bottom Overlay for Controls */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-8 z-10">
-              {/* Waveform Animation */}
-              <div className="flex justify-center mb-4">
-                <WaveformAnimation />
-              </div>
-              
-              {/* Status Text */}
-              <p className="text-xl text-white font-medium text-center mb-6">
-                {getStatusText()}
-              </p>
-              
-              {/* Control Buttons Container */}
-              <div className="flex justify-center items-center space-x-4">
-                {/* Microphone Button */}
-                <div className="relative">
-                  {/* Animated Ring for Active State */}
-                  {isRecording && (
-                    <>
-                      <div className="absolute inset-0 rounded-full border-4 border-white animate-ping opacity-75"></div>
-                      <div className="absolute inset-0 rounded-full border-2 border-white animate-pulse"></div>
-                    </>
-                  )}
-                  
-                  <button
-                    onClick={handleMicClick}
-                    disabled={isProcessingResponse}
-                    className={`relative w-20 h-20 rounded-full border-4 transition-all duration-300 flex items-center justify-center ${
-                      isRecording 
-                        ? 'bg-red-500 border-red-500 text-white scale-110' 
-                        : 'bg-white border-white text-black hover:scale-105 shadow-lg'
-                    } ${isProcessingResponse ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    {isRecording ? (
-                      <MicOff className="h-8 w-8" />
-                    ) : (
-                      <Mic className="h-8 w-8" />
-                    )}
-                  </button>
+          
+          {!interviewStarted ? (
+            /* Pre-Interview Start Screen */
+            <div className="flex-1 flex items-center justify-center p-4 md:p-12">
+              <div className="text-center">
+                <div className="mb-4 md:mb-8">
+                  <div className="w-16 md:w-24 h-16 md:h-24 bg-black rounded-full flex items-center justify-center mx-auto mb-3 md:mb-6">
+                    <span className="text-white text-2xl md:text-3xl">🎥</span>
+                  </div>
+                  <h2 className="text-xl md:text-3xl font-bold mb-2 md:mb-4">Ready to Start?</h2>
+                  <p className="text-gray-600 mb-4 md:mb-8 max-w-sm text-sm md:text-base px-2">
+                    We'll need access to your camera and microphone for this interview. 
+                    Click the button below to grant permissions and begin.
+                  </p>
                 </div>
                 
-                {/* End Interview Button (appears after question 5) */}
-                {currentQuestion >= 4 && !isProcessingResponse && (
-                  <button
-                    onClick={handleComplete}
-                    className="bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-black transition-colors font-semibold"
-                  >
-                    End Interview
-                  </button>
-                )}
+                <button
+                  onClick={startInterview}
+                  className="bg-black hover:bg-gray-800 text-white px-6 md:px-8 py-3 md:py-4 rounded-lg font-semibold flex items-center space-x-2 mx-auto transition-all duration-200 text-sm md:text-base"
+                >
+                  <span>Start Interview</span>
+                  <ArrowRight className="h-4 w-4 md:h-5 md:w-5" />
+                </button>
+                
+                <div className="mt-4 md:mt-8 text-xs md:text-sm text-gray-500 space-y-1">
+                  <p>• Make sure you're in a quiet environment</p>
+                  <p>• Ensure good lighting on your face</p>
+                  <p>• Check your internet connection</p>
+                </div>
               </div>
             </div>
-          </>
-        )}
+          ) : (
+            /* Interview Interface */
+            <>
+              {/* User Video - Full Panel */}
+              <div className="relative flex-1">
+                <video
+                  ref={setUserVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover"
+                >
+                </video>
+                <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 bg-black bg-opacity-50 text-white px-2 md:px-3 py-1 md:py-2 rounded text-xs md:text-lg z-10">
+                  You
+                </div>
+              </div>
+              
+              {/* Bottom Overlay for Controls */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 md:p-8 z-10">
+                {/* Waveform Animation */}
+                <div className="flex justify-center mb-2 md:mb-8">
+                  <div className="flex items-center justify-center space-x-1 h-8 md:h-16">
+                    {[...Array(window.innerWidth < 768 ? 15 : 25)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="bg-white md:bg-black transition-all duration-100"
+                        style={{
+                          width: window.innerWidth < 768 ? '2px' : '3px',
+                          height: `${isRecording ? (window.innerWidth < 768 ? Math.random() * 20 + 5 : Math.random() * 40 + 10) : 2}px`,
+                          opacity: isRecording ? 0.4 + Math.random() * 0.6 : 0.4,
+                          borderRadius: '1px'
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Status Text */}
+                <p className="text-sm md:text-xl text-white md:text-black font-medium text-center mb-3 md:mb-8">
+                  {getStatusText()}
+                </p>
+                
+                {/* Control Buttons Container */}
+                <div className="flex justify-center items-center space-x-3 md:space-x-4">
+                  {/* Microphone Button */}
+                  <div className="relative">
+                    {/* Animated Ring for Active State */}
+                    {isRecording && (
+                      <>
+                        <div className="absolute inset-0 rounded-full border-2 md:border-4 border-white md:border-black animate-ping opacity-75"></div>
+                        <div className="absolute inset-0 rounded-full border-2 md:border-2 border-white md:border-black animate-pulse"></div>
+                      </>
+                    )}
+                    
+                    <button
+                      onClick={handleMicClick}
+                      disabled={isProcessingResponse}
+                      className={`relative w-14 h-14 md:w-40 md:h-40 rounded-full border-2 md:border-4 transition-all duration-300 flex items-center justify-center ${
+                        isRecording 
+                          ? 'bg-red-500 md:bg-black border-red-500 md:border-black text-white scale-110' 
+                          : 'bg-white border-white md:border-black text-black hover:scale-105 shadow-lg'
+                      } ${isProcessingResponse ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      {isRecording ? (
+                        <MicOff className="h-5 w-5 md:h-16 md:w-16" />
+                      ) : (
+                        <Mic className="h-5 w-5 md:h-16 md:w-16" />
+                      )}
+                    </button>
+                  </div>
+                  
+                  {/* End Interview Button (appears after question 5) */}
+                  {currentQuestion >= 4 && !isProcessingResponse && (
+                    <button
+                      onClick={handleComplete}
+                      className="bg-gray-800 text-white px-3 md:px-6 py-2 md:py-3 rounded-lg hover:bg-black transition-colors font-semibold text-xs md:text-base"
+                    >
+                      End Interview
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

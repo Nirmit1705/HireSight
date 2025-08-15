@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, Home, User, LogIn, LogOut, BarChart3, BookOpen, Target } from 'lucide-react';
+import { Brain, Home, User, LogIn, LogOut, BarChart3, BookOpen, Target, Menu, X } from 'lucide-react';
 import { PageType } from '../App';
 import AuthModal from './AuthModal';
 
@@ -14,6 +14,7 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticated, onLogin, onLogout }) => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -33,23 +34,37 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticate
     onLogin();
   };
 
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const handleMobileNavigate = (page: PageType) => {
+    onNavigate(page);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleMobileAuth = (mode: 'signin' | 'signup') => {
+    handleAuthClick(mode);
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 bg-black">
-        <div className="container mx-auto px-6 py-4">
+        <div className="container mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
             <div 
               className="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => onNavigate(isAuthenticated ? 'dashboard' : 'landing')}
             >
-              <Brain className="h-8 w-8 text-white" />
-              <span className="text-xl font-bold text-white">Hiresight</span>
+              <img src="/logo.png" alt="Hiresight Logo" className="h-7 w-7 sm:h-9 sm:w-9" />
+              <span className="text-lg sm:text-2xl font-bold text-white">Hiresight</span>
             </div>
 
-            {/* Navigation Links */}
+            {/* Desktop Navigation Links */}
             {isAuthenticated && (
-              <div className="hidden md:flex items-center space-x-8">
+              <div className="hidden lg:flex items-center space-x-6">
                 {navItems.map(({ id, label, icon: Icon }) => (
                   <button
                     key={id}
@@ -67,12 +82,12 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticate
               </div>
             )}
 
-            {/* Auth Buttons */}
-            <div className="flex items-center space-x-4">
+            {/* Desktop Auth Buttons */}
+            <div className="hidden md:flex items-center space-x-4">
               {isAuthenticated ? (
                 <button 
                   onClick={onLogout}
-                  className="hidden md:flex items-center space-x-2 text-white hover:text-gray-300 transition-colors"
+                  className="flex items-center space-x-2 text-white hover:text-gray-300 transition-colors"
                 >
                   <LogOut className="h-4 w-4" />
                   <span>Logout</span>
@@ -81,21 +96,91 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticate
                 <>
                   <button 
                     onClick={() => handleAuthClick('signin')}
-                    className="hidden md:flex items-center space-x-2 text-white hover:text-gray-300 transition-colors"
+                    className="flex items-center space-x-2 text-white hover:text-gray-300 transition-colors"
                   >
                     <LogIn className="h-4 w-4" />
                     <span>Login</span>
                   </button>
                   <button 
                     onClick={() => handleAuthClick('signup')}
-                    className="bg-white hover:bg-gray-100 text-black px-6 py-2 rounded-lg font-medium transition-colors border border-gray-300"
+                    className="bg-white hover:bg-gray-100 text-black px-4 py-2 rounded-lg font-medium transition-colors"
                   >
                     Sign Up
                   </button>
                 </>
               )}
             </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={toggleMobileMenu}
+              className="md:hidden text-white hover:text-gray-300 transition-colors p-2"
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </button>
           </div>
+
+          {/* Mobile Menu */}
+          {isMobileMenuOpen && (
+            <div className="md:hidden mt-4 pb-4 border-t border-gray-700">
+              <div className="flex flex-col space-y-2 pt-4">
+                {/* Mobile Navigation Links */}
+                {isAuthenticated && (
+                  <>
+                    {navItems.map(({ id, label, icon: Icon }) => (
+                      <button
+                        key={id}
+                        onClick={() => handleMobileNavigate(id as PageType)}
+                        className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                          currentPage === id
+                            ? 'text-black bg-white'
+                            : 'text-white hover:text-gray-300 hover:bg-gray-800'
+                        }`}
+                      >
+                        <Icon className="h-5 w-5" />
+                        <span className="font-medium">{label}</span>
+                      </button>
+                    ))}
+                    <div className="border-t border-gray-700 my-2"></div>
+                  </>
+                )}
+
+                {/* Mobile Auth Buttons */}
+                {isAuthenticated ? (
+                  <button 
+                    onClick={() => {
+                      onLogout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center space-x-3 px-4 py-3 text-white hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                  >
+                    <LogOut className="h-5 w-5" />
+                    <span>Logout</span>
+                  </button>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => handleMobileAuth('signin')}
+                      className="flex items-center space-x-3 px-4 py-3 text-white hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                    >
+                      <LogIn className="h-5 w-5" />
+                      <span>Login</span>
+                    </button>
+                    <button 
+                      onClick={() => handleMobileAuth('signup')}
+                      className="mx-4 bg-white hover:bg-gray-100 text-black px-4 py-3 rounded-lg font-medium transition-colors text-center"
+                    >
+                      Sign Up
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </nav>
 

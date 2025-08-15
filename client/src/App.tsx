@@ -1,119 +1,80 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
-import LandingPage from './components/LandingPage';
-import Dashboard from './components/Dashboard';
-import PositionSelection from './components/PositionSelection';
-import AptitudeTest from './components/AptitudeTest';
-import LiveInterview from './components/LiveInterview';
-import Feedback from './components/Feedback';
-import UserProfile from './components/UserProfile';
-import History from './components/History';
-import HistoryDetail from './components/HistoryDetail';
+import { AppProviders } from './AppProviders';
+import { AppRoutes } from './AppRoutes';
+import { useAuth } from './hooks/useAuth';
+import { useAppState } from './hooks/useAppState';
+import { useHistoryManager } from './hooks/useHistoryManager';
+import { createRouteConfig, PageType } from './routes';
 
-export type PageType = 'landing' | 'dashboard' | 'position' | 'aptitude' | 'interview' | 'feedback' | 'profile' | 'history' | 'history-detail';
+export type { PageType } from './routes';
 
-function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>('landing');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [selectedPosition, setSelectedPosition] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('');
-  const [testScore, setTestScore] = useState(0);
-  const [interviewScore, setInterviewScore] = useState(0);
-  const [currentHistoryId, setCurrentHistoryId] = useState<string>('');
+function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated, handleLogin, handleLogout } = useAuth();
+  const appState = useAppState();
+  
+  useHistoryManager(appState, isAuthenticated);
 
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-    setCurrentPage('dashboard');
+  const handleNavigate = (page: PageType, historyId?: string) => {
+    const routeConfig = createRouteConfig(appState, handleNavigate, handleLogin, () => null);
+    const route = routeConfig.find(r => r.pageKey === page);
+    
+    if (!route) {
+      console.warn(`Route not found for page: ${page}`);
+      return;
+    }
+
+    let path = route.path;
+    if (historyId && page === 'history-detail') {
+      path = path.replace(':id', historyId);
+    }
+    
+    navigate(path);
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentPage('landing');
-  };
-
-  const handleNavigation = (page: PageType, historyId?: string) => {
-    setCurrentPage(page);
-    if (historyId) {
-      setCurrentHistoryId(historyId);
-    }
-  };
-
-  // Save attempt to history when feedback is reached
-  React.useEffect(() => {
-    if (currentPage === 'feedback' && (testScore > 0 || interviewScore > 0)) {
-      const newHistoryItem = {
-        id: Date.now().toString(),
-        type: 'interview' as const,
-        date: new Date().toISOString().split('T')[0],
-        score: interviewScore,
-        position: selectedPosition,
-        domain: selectedDomain,
-        duration: '25:30', // Mock duration
-        status: 'completed' as const,
-        testScore: testScore
-      };
-
-      const savedHistory = localStorage.getItem('hiresight_history');
-      const historyItems = savedHistory ? JSON.parse(savedHistory) : [];
-      historyItems.unshift(newHistoryItem);
-      localStorage.setItem('hiresight_history', JSON.stringify(historyItems));
-    }
-  }, [currentPage, testScore, interviewScore, selectedPosition, selectedDomain]);
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'landing':
-        return <LandingPage onNavigate={handleNavigation} onLogin={handleLogin} />;
-      case 'dashboard':
-        return <Dashboard onNavigate={handleNavigation} />;
-      case 'position':
-        return (
-          <PositionSelection
-            onNavigate={handleNavigation}
-            selectedPosition={selectedPosition}
-            setSelectedPosition={setSelectedPosition}
-            selectedDomain={selectedDomain}
-            setSelectedDomain={setSelectedDomain}
-          />
-        );
-      case 'aptitude':
-        return <AptitudeTest onNavigate={handleNavigation} setTestScore={setTestScore} />;
-      case 'interview':
-        return <LiveInterview onNavigate={handleNavigation} setInterviewScore={setInterviewScore} />;
-      case 'feedback':
-        return (
-          <Feedback
-            onNavigate={handleNavigation}
-            position={selectedPosition}
-            domain={selectedDomain}
-            testScore={testScore}
-            interviewScore={interviewScore}
-          />
-        );
-      case 'profile':
-        return <UserProfile onNavigate={handleNavigation} />;
-      case 'history':
-        return <History onNavigate={handleNavigation} />;
-      case 'history-detail':
-        return <HistoryDetail onNavigate={handleNavigation} historyId={currentHistoryId} />;
-      default:
-        return <LandingPage onNavigate={handleNavigation} onLogin={handleLogin} />;
-    }
+  const getCurrentPage = (): PageType => {
+    const routeConfig = createRouteConfig(appState, handleNavigate, handleLogin, () => null);
+    const currentRoute = routeConfig.find(route => {
+      if (route.path.includes(':id')) {
+        return location.pathname.startsWith(route.path.split('/:')[0]);
+      }
+      return route.path === location.pathname;
+    });
+    
+    return currentRoute?.pageKey || 'landing';
   };
 
   return (
-    <div className="min-h-screen bg-white text-black font-inter">
-      <Navbar 
-        currentPage={currentPage} 
-        onNavigate={handleNavigation} 
-        isAuthenticated={isAuthenticated}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
-      />
-      <main className="relative">
-        {renderPage()}
-      </main>
-    </div>
+    <AppProviders appState={appState}>
+      <div className="min-h-screen bg-white text-black font-inter">
+        <Navbar 
+          currentPage={getCurrentPage()} 
+          onNavigate={handleNavigate} 
+          isAuthenticated={isAuthenticated}
+          onLogin={handleLogin}
+          onLogout={handleLogout}
+        />
+        <main className="relative">
+          <AppRoutes
+            appState={appState}
+            handleNavigate={handleNavigate}
+            handleLogin={handleLogin}
+            isAuthenticated={isAuthenticated}
+          />
+        </main>
+      </div>
+    </AppProviders>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 

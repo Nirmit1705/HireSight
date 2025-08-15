@@ -61,7 +61,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
 
   return (
     <div className="min-h-screen pt-20 pb-12">
-      <div className="container mx-auto px-6">
+      <div className="container mx-auto px-6 pt-6">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="bg-white border-2 border-gray-200 rounded-xl p-8 mb-8 shadow-lg">
@@ -72,11 +72,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
               <div>
                 <h1 className="text-3xl font-bold mb-2">John Doe</h1>
                 <p className="text-gray-600">Aspiring Software Developer</p>
-                <div className="flex items-center space-x-4 mt-2">
-                  <span className="text-sm text-gray-500">Member since Jan 2024</span>
-                  <span className="text-sm text-black">•</span>
-                  <span className="text-sm text-gray-500">Premium Plan</span>
-                </div>
               </div>
             </div>
           </div>

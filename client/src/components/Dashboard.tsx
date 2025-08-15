@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, 
   FileText, 
@@ -12,14 +13,11 @@ import {
   Brain,
   Star
 } from 'lucide-react';
-import { PageType } from '../App';
 import PerformanceTrendChart from './PerformanceTrendChart';
 
-interface DashboardProps {
-  onNavigate: (page: PageType) => void;
-}
+const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   // Mock data - in real app this would come from API
   const userStats = {
     aptitudeScore: 81, // Latest aptitude test score
@@ -69,7 +67,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   return (
     <div className="min-h-screen pt-20 pb-12 bg-gray-50">
-      <div className="container mx-auto px-6">
+      <div className="container mx-auto px-6 pt-6">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
@@ -243,24 +241,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
                 <div className="space-y-4">
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <h4 className="font-semibold text-black mb-2">Retake Aptitude Test</h4>
-                    <p className="text-sm text-gray-600 mb-3">Improve your logic and reasoning scores</p>
+                    <h4 className="font-semibold text-black mb-2">Practice Session</h4>
+                    <p className="text-sm text-gray-600 mb-3">Enhance your aptitude preparation with mock practice sessions</p>
                     <button 
-                      onClick={() => onNavigate('aptitude')}
+                      onClick={() => navigate('/practice')}
                       className="bg-black text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
                     >
-                      Start Test
+                      Start Practice
                     </button>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <h4 className="font-semibold text-black mb-2">Start New Interview</h4>
-                    <p className="text-sm text-gray-600 mb-3">Practice with different question types</p>
+                    <h4 className="font-semibold text-black mb-2">Assessment Test</h4>
+                    <p className="text-sm text-gray-600 mb-3">Evaluate your aptitude and technical knowledge</p>
                     <button 
-                      onClick={() => onNavigate('position')}
+                      onClick={() => navigate('/assessment')}
                       className="bg-black text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
                     >
-                      Begin Interview
+                      Take Assessment
                     </button>
                   </div>
                 </div>
@@ -296,7 +294,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
 
                 <button 
-                  onClick={() => onNavigate('history')}
+                  onClick={() => navigate('/history')}
                   className="w-full mt-4 text-center text-sm text-gray-600 hover:text-black transition-colors"
                 >
                   View All Activity

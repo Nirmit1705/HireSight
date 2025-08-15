@@ -56,6 +56,24 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({ onNavigate, setInterviewS
     // Simulate interview scoring based on responses
     const score = Math.floor(Math.random() * 30) + 70; // Random score between 70-100
     setInterviewScore(score);
+    
+    // Save interview to history
+    const newHistoryItem = {
+      id: Date.now().toString(),
+      type: 'interview' as const,
+      date: new Date().toISOString().split('T')[0],
+      score: score,
+      duration: formatTime(timeElapsed),
+      status: 'completed' as const,
+      responses: responses.filter(response => response.trim() !== ''),
+      questions: questions
+    };
+
+    const savedHistory = localStorage.getItem('hiresight_history');
+    const historyItems = savedHistory ? JSON.parse(savedHistory) : [];
+    historyItems.unshift(newHistoryItem);
+    localStorage.setItem('hiresight_history', JSON.stringify(historyItems));
+    
     setIsCompleted(true);
   };
 
@@ -138,7 +156,7 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({ onNavigate, setInterviewS
                 </div>
                 
                 <div className="text-sm text-gray-600">
-                  💡 Take your time to think and provide a comprehensive answer
+                  Take your time to think and provide a comprehensive answer
                 </div>
               </div>
 

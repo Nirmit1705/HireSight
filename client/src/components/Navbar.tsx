@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, Home, User, LogIn, LogOut, BarChart3 } from 'lucide-react';
+import { Brain, Home, User, LogIn, LogOut, BarChart3, BookOpen, Target } from 'lucide-react';
 import { PageType } from '../App';
 import AuthModal from './AuthModal';
 
@@ -17,6 +17,8 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticate
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
+    { id: 'practice', label: 'Practice', icon: BookOpen },
+    { id: 'assessment', label: 'Assessment', icon: Target },
     { id: 'history', label: 'History', icon: BarChart3 },
     { id: 'profile', label: 'Profile', icon: User },
   ];

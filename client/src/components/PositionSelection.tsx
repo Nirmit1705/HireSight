@@ -8,6 +8,7 @@ interface PositionSelectionProps {
   setSelectedPosition: (position: string) => void;
   selectedDomain: string;
   setSelectedDomain: (domain: string) => void;
+  isAssessmentMode?: boolean;
 }
 
 const PositionSelection: React.FC<PositionSelectionProps> = ({
@@ -15,7 +16,8 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
   selectedPosition,
   setSelectedPosition,
   selectedDomain,
-  setSelectedDomain
+  setSelectedDomain,
+  isAssessmentMode = false
 }) => {
   const positions = [
     { id: 'frontend', title: 'Frontend Developer', icon: Code, description: 'React, Vue, Angular, HTML/CSS' },
@@ -37,7 +39,8 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
 
   const handleProceed = () => {
     if (selectedPosition && selectedDomain) {
-      onNavigate('aptitude');
+      // If in assessment mode, skip directly to interview
+      onNavigate(isAssessmentMode ? 'interview' : 'aptitude');
     }
   };
 
@@ -51,8 +54,18 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
               Select Your Target Role
             </h1>
             <p className="text-xl text-gray-600">
-              Choose your position and domain to get personalized interview preparation
+              {isAssessmentMode 
+                ? 'Choose your position and domain for the interview assessment'
+                : 'Choose your position and domain to get personalized interview preparation'
+              }
             </p>
+            {isAssessmentMode && (
+              <div className="mt-4 bg-gray-100 border border-black rounded-lg p-3 max-w-md mx-auto">
+                <p className="text-sm text-black">
+                  Using your previous aptitude score - proceeding directly to interview
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Position Selection */}
@@ -121,20 +134,22 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >
-              <span>Start Aptitude Test</span>
+              <span>{isAssessmentMode ? 'Start Interview' : 'Start Aptitude Test'}</span>
               <ArrowRight className="h-5 w-5" />
             </button>
-            <button
-              onClick={() => onNavigate('interview')}
-              disabled={!selectedPosition || !selectedDomain}
-              className={`px-8 py-4 rounded-lg font-semibold border-2 transition-all duration-200 ${
-                selectedPosition && selectedDomain
-                  ? 'border-black text-black hover:bg-gray-50'
-                  : 'border-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              Skip to Interview
-            </button>
+            {!isAssessmentMode && (
+              <button
+                onClick={() => onNavigate('interview')}
+                disabled={!selectedPosition || !selectedDomain}
+                className={`px-8 py-4 rounded-lg font-semibold border-2 transition-all duration-200 ${
+                  selectedPosition && selectedDomain
+                    ? 'border-black text-black hover:bg-gray-50'
+                    : 'border-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Skip to Interview
+              </button>
+            )}
           </div>
 
           {/* Selection Summary */}

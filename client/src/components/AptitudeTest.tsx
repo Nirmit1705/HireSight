@@ -5,9 +5,10 @@ import { PageType } from '../App';
 interface AptitudeTestProps {
   onNavigate: (page: PageType) => void;
   setTestScore: (score: number) => void;
+  isPracticeMode?: boolean;
 }
 
-const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore }) => {
+const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, isPracticeMode = false }) => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes
@@ -106,29 +107,31 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore })
     const percentage = Math.round((score / questions.length) * 100);
     setTestScore(percentage);
     
-    // Save aptitude test to history with detailed results
-    const detailedResults = questions.map((question, index) => ({
-      question: question.question,
-      options: question.options,
-      selectedAnswer: selectedAnswers[index],
-      correctAnswer: question.correct,
-      isCorrect: selectedAnswers[index] === question.correct
-    }));
+    // Only save to history if not in practice mode
+    if (!isPracticeMode) {
+      const detailedResults = questions.map((question, index) => ({
+        question: question.question,
+        options: question.options,
+        selectedAnswer: selectedAnswers[index],
+        correctAnswer: question.correct,
+        isCorrect: selectedAnswers[index] === question.correct
+      }));
 
-    const newHistoryItem = {
-      id: Date.now().toString(),
-      type: 'aptitude' as const,
-      date: new Date().toISOString().split('T')[0],
-      score: percentage,
-      duration: `${Math.floor((1800 - timeLeft) / 60)}:${String((1800 - timeLeft) % 60).padStart(2, '0')}`,
-      status: 'completed' as const,
-      detailedResults: detailedResults
-    };
+      const newHistoryItem = {
+        id: Date.now().toString(),
+        type: 'aptitude' as const,
+        date: new Date().toISOString().split('T')[0],
+        score: percentage,
+        duration: `${Math.floor((1800 - timeLeft) / 60)}:${String((1800 - timeLeft) % 60).padStart(2, '0')}`,
+        status: 'completed' as const,
+        detailedResults: detailedResults
+      };
 
-    const savedHistory = localStorage.getItem('hiresight_history');
-    const historyItems = savedHistory ? JSON.parse(savedHistory) : [];
-    historyItems.unshift(newHistoryItem);
-    localStorage.setItem('hiresight_history', JSON.stringify(historyItems));
+      const savedHistory = localStorage.getItem('hiresight_history');
+      const historyItems = savedHistory ? JSON.parse(savedHistory) : [];
+      historyItems.unshift(newHistoryItem);
+      localStorage.setItem('hiresight_history', JSON.stringify(historyItems));
+    }
     
     setIsCompleted(true);
   };
@@ -149,15 +152,30 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore })
 
     return (
       <div className="min-h-screen pt-20 pb-12">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-6 pt-6">
           <div className="max-w-4xl mx-auto">
             {/* Overall Results */}
             <div className="text-center mb-8">
               <div className="bg-white border-2 border-gray-200 rounded-xl p-8 shadow-lg">
                 <CheckCircle className="h-16 w-16 text-black mx-auto mb-4" />
-                <h2 className="text-3xl font-bold mb-2">Test Completed!</h2>
-                <p className="text-gray-600 mb-6">Here's your detailed breakdown</p>
+                <h2 className="text-3xl font-bold mb-2">
+                  {isPracticeMode ? 'Practice Completed!' : 'Test Completed!'}
+                </h2>
+                <p className="text-gray-600 mb-6">
+                  {isPracticeMode 
+                    ? "Here's your practice results - these won't affect your official scores" 
+                    : "Here's your detailed breakdown"
+                  }
+                </p>
                 
+                {isPracticeMode && (
+                  <div className="bg-gray-100 border border-black rounded-lg p-4 mb-6">
+                    <p className="text-sm text-black">
+                      This was a practice session. Your results are not saved to your profile.
+                    </p>
+                  </div>
+                )}
+
                 <div className="bg-gray-50 rounded-lg p-6 mb-6 border border-gray-200">
                   <div className={`text-4xl font-bold mb-2 ${getScoreColor(percentage)}`}>{percentage}%</div>
                   <div className="text-gray-700 mb-2">Your Score</div>
@@ -259,8 +277,8 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore })
                               </span>
                             </div>
                             {!isCorrect && (
-                              <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mt-3">
-                                <p className="text-sm text-yellow-800">
+                              <div className="bg-gray-100 border border-black rounded p-3 mt-3">
+                                <p className="text-sm text-black">
                                   <strong>Explanation:</strong> The correct answer is "{question.options[question.correct]}" 
                                   because it represents the most accurate solution to this problem.
                                 </p>
@@ -277,19 +295,39 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore })
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={() => onNavigate('interview')}
-                className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-200 hover:scale-105"
-              >
-                <span>Proceed to Interview</span>
-                <ArrowRight className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => onNavigate('dashboard')}
-                className="bg-white hover:bg-gray-50 text-black px-8 py-4 rounded-lg font-semibold border-2 border-black flex items-center justify-center space-x-2 transition-all duration-200"
-              >
-                <span>Back to Dashboard</span>
-              </button>
+              {isPracticeMode ? (
+                <>
+                  <button
+                    onClick={() => onNavigate('practice-aptitude')}
+                    className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-200 hover:scale-105"
+                  >
+                    <span>Practice Again</span>
+                    <ArrowRight className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => onNavigate('practice')}
+                    className="bg-white hover:bg-gray-50 text-black px-8 py-4 rounded-lg font-semibold border-2 border-black flex items-center justify-center space-x-2 transition-all duration-200"
+                  >
+                    <span>Back to Practice</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => onNavigate('interview')}
+                    className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-200 hover:scale-105"
+                  >
+                    <span>Proceed to Interview</span>
+                    <ArrowRight className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => onNavigate('dashboard')}
+                    className="bg-white hover:bg-gray-50 text-black px-8 py-4 rounded-lg font-semibold border-2 border-black flex items-center justify-center space-x-2 transition-all duration-200"
+                  >
+                    <span>Back to Dashboard</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -299,17 +337,27 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore })
 
   return (
     <div className="min-h-screen pt-20 pb-12">
-      <div className="container mx-auto px-6">
+      <div className="container mx-auto px-6 pt-6">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-8">
             <div className="flex justify-between items-center mb-4">
-              <h1 className="text-3xl font-bold">Aptitude Test</h1>
+              <h1 className="text-3xl font-bold">
+                {isPracticeMode ? 'Practice - Aptitude Test' : 'Aptitude Test'}
+              </h1>
               <div className="flex items-center space-x-2 text-black">
                 <Clock className="h-5 w-5" />
                 <span className="text-lg font-semibold">{formatTime(timeLeft)}</span>
               </div>
             </div>
+
+            {isPracticeMode && (
+              <div className="bg-gray-100 border border-black rounded-lg p-3 mb-4">
+                <p className="text-sm text-black">
+                  Practice Mode: Take your time and learn from the explanations. Results won't be saved.
+                </p>
+              </div>
+            )}
             
             {/* Progress Bar */}
             <div className="w-full bg-gray-200 rounded-full h-2">

@@ -260,7 +260,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <h3 className="font-semibold mb-2 text-black">Practice Communication</h3>
                 <p className="text-sm text-gray-600 mb-4">Your communication scores can be improved with focused practice.</p>
-                <button className="text-black text-sm hover:text-gray-700 transition-colors font-medium">
+                <button 
+                  onClick={() => onNavigate('position')}
+                  className="text-black text-sm hover:text-gray-700 transition-colors font-medium"
+                >
                   Start Practice →
                 </button>
               </div>
@@ -280,7 +283,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
                 <h3 className="font-semibold mb-2 text-black">Take Aptitude Test</h3>
                 <p className="text-sm text-gray-600 mb-4">Regular testing helps track your progress and identify gaps.</p>
                 <button 
-                  onClick={() => onNavigate('aptitude')}
+                  onClick={() => onNavigate('practice-aptitude')}
                   className="text-black text-sm hover:text-gray-700 transition-colors font-medium"
                 >
                   Take Test →

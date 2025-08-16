@@ -10,6 +10,7 @@ interface AppRoutesProps {
   handleNavigate: (page: PageType, historyId?: string) => void;
   handleLogin: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 // Wrapper components for routes with params
@@ -22,7 +23,8 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   appState,
   handleNavigate,
   handleLogin,
-  isAuthenticated
+  isAuthenticated,
+  isLoading
 }) => {
   const routeConfig = useMemo(() => 
     createRouteConfig(appState, handleNavigate, handleLogin, HistoryDetailWrapper),
@@ -34,7 +36,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
       {routeConfig.map((route) => {
         const Component = route.component;
         const element = route.requiresAuth ? (
-          <ProtectedRoute isAuthenticated={isAuthenticated}>
+          <ProtectedRoute isAuthenticated={isAuthenticated} isLoading={isLoading}>
             <Component {...(route.props || {})} />
           </ProtectedRoute>
         ) : (

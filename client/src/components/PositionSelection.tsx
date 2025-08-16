@@ -46,7 +46,7 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
 
   return (
     <div className="min-h-screen pt-20 pb-12">
-      <div className="container mx-auto px-6">
+      <div className="container mx-auto px-6 pt-6">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">

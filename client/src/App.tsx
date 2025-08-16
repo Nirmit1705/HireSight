@@ -13,7 +13,7 @@ export type { PageType } from './routes';
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, handleLogin, handleLogout } = useAuth();
+  const { isAuthenticated, isLoading, handleLogin, handleLogout } = useAuth();
   const appState = useAppState();
   
   useHistoryManager(appState, isAuthenticated);
@@ -63,6 +63,7 @@ function AppContent() {
             handleNavigate={handleNavigate}
             handleLogin={handleLogin}
             isAuthenticated={isAuthenticated}
+            isLoading={isLoading}
           />
         </main>
       </div>

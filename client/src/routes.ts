@@ -9,9 +9,11 @@ import UserProfile from './components/UserProfile';
 import History from './components/History';
 import PracticeSelection from './components/PracticeSelection';
 import AssessmentFlow from './components/AssessmentFlow';
+import AuthSuccess from './pages/AuthSuccess';
+import AuthError from './pages/AuthError';
 import { AppState } from './context/AppStateContext';
 
-export type PageType = 'landing' | 'dashboard' | 'position' | 'aptitude' | 'interview' | 'feedback' | 'profile' | 'history' | 'history-detail' | 'practice' | 'practice-aptitude' | 'assessment' | 'assessment-position';
+export type PageType = 'landing' | 'dashboard' | 'position' | 'aptitude' | 'interview' | 'feedback' | 'profile' | 'history' | 'history-detail' | 'practice' | 'practice-aptitude' | 'assessment' | 'assessment-position' | 'auth-success' | 'auth-error';
 
 // Route Configuration
 export interface RouteConfig {
@@ -144,5 +146,17 @@ export const createRouteConfig = (
     component: HistoryDetailWrapper,
     requiresAuth: true,
     props: { onNavigate: handleNavigate }
+  },
+  {
+    path: '/auth/success',
+    pageKey: 'auth-success',
+    component: AuthSuccess,
+    requiresAuth: false
+  },
+  {
+    path: '/auth/error',
+    pageKey: 'auth-error',
+    component: AuthError,
+    requiresAuth: false
   }
 ];

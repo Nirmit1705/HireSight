@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, FileText, Video, BarChart3, Calendar, Trophy, TrendingUp } from 'lucide-react';
+import { Clock, FileText, Video, BarChart3, Calendar, Trophy, TrendingUp, Loader } from 'lucide-react';
 import { PageType } from '../App';
+import { aptitudeAPI } from '../services/aptitudeAPI';
 
 interface HistoryProps {
   onNavigate: (page: PageType, historyId?: string) => void;
@@ -15,19 +16,76 @@ interface HistoryItem {
   domain?: string;
   duration?: string;
   status: 'completed' | 'in-progress';
+  timeTaken?: number;
 }
 
 const History: React.FC<HistoryProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'aptitude' | 'interview'>('interview');
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load history from localStorage
-    const savedHistory = localStorage.getItem('hiresight_history');
-    if (savedHistory) {
-      setHistoryItems(JSON.parse(savedHistory));
-    } else {
-      // Mock data for demonstration
+    // Clear any old localStorage history data since we're now using backend
+    localStorage.removeItem('hiresight_history');
+    loadHistory();
+  }, []);
+
+  const loadHistory = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Load aptitude test history from backend
+      console.log('Fetching aptitude history...');
+      const aptitudeHistory = await aptitudeAPI.getTestHistory();
+      console.log('Aptitude history received:', aptitudeHistory);
+      
+      // Convert backend format to frontend format
+      const formattedAptitudeHistory: HistoryItem[] = aptitudeHistory.map(test => ({
+        id: test.id,
+        type: 'aptitude' as const,
+        date: test.completedAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+        score: test.overallScore || 0,
+        position: test.position,
+        duration: test.timeTaken ? formatDuration(test.timeTaken) : '0:00',
+        status: 'completed' as 'completed' | 'in-progress'
+      }));
+
+      console.log('Formatted aptitude history:', formattedAptitudeHistory);
+
+      // For now, we'll only show aptitude history from backend
+      // Interview history can be added later when that API is ready
+      const mockInterviewHistory: HistoryItem[] = [
+        {
+          id: '1',
+          type: 'interview',
+          date: '2024-01-28',
+          score: 76,
+          position: 'Frontend Developer',
+          domain: 'React.js',
+          duration: '25:30',
+          status: 'completed'
+        },
+        {
+          id: '3',
+          type: 'interview',
+          date: '2024-01-22',
+          score: 68,
+          position: 'Backend Developer',
+          domain: 'Node.js',
+          duration: '22:15',
+          status: 'completed'
+        }
+      ];
+
+      const allHistory = [...formattedAptitudeHistory, ...mockInterviewHistory];
+      console.log('All history items:', allHistory);
+      setHistoryItems(allHistory);
+    } catch (err) {
+      console.error('Error loading history:', err);
+      setError('Failed to load test history');
+      // Fallback to mock data if API fails
       const mockHistory: HistoryItem[] = [
         {
           id: '1',
@@ -40,14 +98,6 @@ const History: React.FC<HistoryProps> = ({ onNavigate }) => {
           status: 'completed'
         },
         {
-          id: '2',
-          type: 'aptitude',
-          date: '2024-01-25',
-          score: 81,
-          duration: '28:45',
-          status: 'completed'
-        },
-        {
           id: '3',
           type: 'interview',
           date: '2024-01-22',
@@ -56,20 +106,19 @@ const History: React.FC<HistoryProps> = ({ onNavigate }) => {
           domain: 'Node.js',
           duration: '22:15',
           status: 'completed'
-        },
-        {
-          id: '4',
-          type: 'aptitude',
-          date: '2024-01-18',
-          score: 72,
-          duration: '30:00',
-          status: 'completed'
         }
       ];
       setHistoryItems(mockHistory);
-      localStorage.setItem('hiresight_history', JSON.stringify(mockHistory));
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
+
+  const formatDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const filteredHistory = historyItems.filter(item => item.type === activeTab);
 
@@ -188,7 +237,26 @@ const History: React.FC<HistoryProps> = ({ onNavigate }) => {
 
             {/* History List */}
             <div className="p-6">
-              {filteredHistory.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-12">
+                  <Loader className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-600">Loading history...</p>
+                </div>
+              ) : error ? (
+                <div className="text-center py-12">
+                  <div className="p-4 bg-red-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <FileText className="h-8 w-8 text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-red-600 mb-2">Error Loading History</h3>
+                  <p className="text-red-500">{error}</p>
+                  <button 
+                    onClick={loadHistory}
+                    className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              ) : filteredHistory.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
                     {activeTab === 'interview' ? 

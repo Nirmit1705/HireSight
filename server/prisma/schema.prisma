@@ -85,6 +85,8 @@ model AptitudeQuestion {
   correctOption Int                 // Index of correct option (0-based)
   category      AptitudeCategory
   difficulty    DifficultyLevel     @default(MEDIUM)
+  explanation   String?             // Explanation for the correct answer
+  tags          String[]            @default([]) // Tags for categorization
   
   // Relations
   testAnswers   AptitudeTestAnswer[]

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Target, TrendingUp, Award, AlertCircle, CheckCircle, ArrowLeft, ArrowRight, RefreshCw, Clock } from 'lucide-react';
+import { BarChart3, Target, TrendingUp, Award, AlertCircle, CheckCircle, ArrowLeft, ArrowRight, RefreshCw, Clock, Loader } from 'lucide-react';
 import { PageType } from '../App';
 import RadarChart from './RadarChart';
+import { aptitudeAPI } from '../services/aptitudeAPI';
 
 interface HistoryDetailProps {
   onNavigate: (page: PageType) => void;
@@ -30,6 +31,8 @@ interface HistoryItem {
 
 const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) => {
   const [historyItem, setHistoryItem] = useState<HistoryItem | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -62,21 +65,94 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
   };
 
   useEffect(() => {
-    // Load specific history item from localStorage
-    const savedHistory = localStorage.getItem('hiresight_history');
-    if (savedHistory) {
-      const historyItems: HistoryItem[] = JSON.parse(savedHistory);
-      const item = historyItems.find(h => h.id === historyId);
-      if (item) {
-        // Add mock detailed scores for interview display
-        setHistoryItem({
-          ...item,
-          testScore: item.type === 'interview' ? Math.floor(Math.random() * 20) + 70 : item.score,
-          interviewScore: item.type === 'interview' ? item.score : 0
-        });
-      }
-    }
+    loadHistoryDetail();
   }, [historyId]);
+
+  const loadHistoryDetail = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // First, try to get the item from the aptitude history API
+      try {
+        const aptitudeHistory = await aptitudeAPI.getTestHistory();
+        const aptitudeItem = aptitudeHistory.find(test => test.id === historyId);
+        
+        if (aptitudeItem) {
+          // This is an aptitude test, get detailed results
+          const detailedResults = await aptitudeAPI.getTestResults(historyId);
+          
+          setHistoryItem({
+            id: aptitudeItem.id,
+            type: 'aptitude',
+            date: aptitudeItem.completedAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+            score: Math.round(aptitudeItem.overallScore || 0),
+            position: aptitudeItem.position,
+            duration: aptitudeItem.timeTaken ? formatDuration(aptitudeItem.timeTaken) : '0:00',
+            status: 'completed',
+            detailedResults: detailedResults.answers.map(answer => ({
+              question: answer.questionText,
+              options: answer.options,
+              selectedAnswer: answer.selectedOption,
+              correctAnswer: answer.correctOption,
+              isCorrect: answer.isCorrect
+            }))
+          });
+          return;
+        }
+      } catch (aptitudeError) {
+        console.log('Not an aptitude test or error fetching aptitude details:', aptitudeError);
+      }
+
+      // If not found in aptitude history, check if it's an interview (mock data)
+      const mockInterviewHistory = [
+        {
+          id: '1',
+          type: 'interview' as const,
+          date: '2024-01-28',
+          score: 76,
+          position: 'Frontend Developer',
+          domain: 'React.js',
+          duration: '25:30',
+          status: 'completed' as const
+        },
+        {
+          id: '3',
+          type: 'interview' as const,
+          date: '2024-01-22',
+          score: 68,
+          position: 'Backend Developer',
+          domain: 'Node.js',
+          duration: '22:15',
+          status: 'completed' as const
+        }
+      ];
+
+      const interviewItem = mockInterviewHistory.find(item => item.id === historyId);
+      if (interviewItem) {
+        setHistoryItem({
+          ...interviewItem,
+          testScore: Math.floor(Math.random() * 20) + 70,
+          interviewScore: interviewItem.score
+        });
+        return;
+      }
+
+      // If not found anywhere, set error
+      setError('History item not found');
+    } catch (err) {
+      console.error('Error loading history detail:', err);
+      setError('Failed to load history details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   if (!historyItem) {
     return (

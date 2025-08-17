@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, CheckCircle, AlertCircle, ArrowRight, ArrowLeft, BarChart3 } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, ArrowRight, ArrowLeft, BarChart3, Loader } from 'lucide-react';
 import { PageType } from '../App';
+import { aptitudeAPI, AptitudeQuestion, AptitudePracticeQuestion } from '../services/aptitudeAPI';
 
 interface AptitudeTestProps {
   onNavigate: (page: PageType) => void;
@@ -13,68 +14,58 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes
   const [isCompleted, setIsCompleted] = useState(false);
+  const [questions, setQuestions] = useState<(AptitudeQuestion | AptitudePracticeQuestion)[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showExplanation, setShowExplanation] = useState<boolean[]>([]);
+  const [testId, setTestId] = useState<string | null>(null);
+  const [detailedAnswers, setDetailedAnswers] = useState<any[]>([]);
 
-  const questions = [
-    {
-      question: "What is the time complexity of binary search?",
-      options: ["O(n)", "O(log n)", "O(n²)", "O(1)"],
-      correct: 1
-    },
-    {
-      question: "Which data structure follows LIFO principle?",
-      options: ["Queue", "Stack", "Array", "Linked List"],
-      correct: 1
-    },
-    {
-      question: "What does SQL stand for?",
-      options: ["Structured Query Language", "Simple Query Language", "Standard Query Language", "System Query Language"],
-      correct: 0
-    },
-    {
-      question: "In React, what is a component?",
-      options: ["A function that returns HTML", "A class or function that returns JSX", "A CSS style", "A database table"],
-      correct: 1
-    },
-    {
-      question: "What is the purpose of version control?",
-      options: ["To backup files", "To track changes and collaborate", "To compile code", "To run tests"],
-      correct: 1
-    },
-    {
-      question: "Which HTTP method is used to retrieve data?",
-      options: ["POST", "PUT", "GET", "DELETE"],
-      correct: 2
-    },
-    {
-      question: "What is the difference between == and === in JavaScript?",
-      options: ["No difference", "=== checks type and value", "== is faster", "=== is deprecated"],
-      correct: 1
-    },
-    {
-      question: "What is a database index?",
-      options: ["A backup of data", "A data structure that improves query speed", "A type of database", "A user interface"],
-      correct: 1
-    },
-    {
-      question: "Which design pattern is used for creating objects?",
-      options: ["Observer", "Strategy", "Factory", "Adapter"],
-      correct: 2
-    },
-    {
-      question: "What is the primary purpose of testing?",
-      options: ["To slow down development", "To ensure code quality and catch bugs", "To increase complexity", "To use more resources"],
-      correct: 1
-    }
-  ];
-
+  // Load questions from API
   useEffect(() => {
-    if (timeLeft > 0 && !isCompleted) {
+    const loadQuestions = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const position = 'FRONTEND_DEVELOPER'; // This could be passed as prop or from context
+        
+        if (isPracticeMode) {
+          const practiceQuestions = await aptitudeAPI.getPracticeQuestions(position);
+          setQuestions(practiceQuestions);
+          setShowExplanation(new Array(practiceQuestions.length).fill(false));
+          setTimeLeft(practiceQuestions.length * 120); // 2 minutes per question for practice
+        } else {
+          // For formal test, start the test session
+          const testSession = await aptitudeAPI.startTest(position, false);
+          setTestId(testSession.testId);
+          
+          const testQuestions = await aptitudeAPI.getQuestions(position);
+          setQuestions(testQuestions);
+          setTimeLeft(testSession.timeLimit * 60); // Convert minutes to seconds
+        }
+
+        setSelectedAnswers(new Array(questions.length).fill(undefined));
+      } catch (err) {
+        console.error('Error loading questions:', err);
+        setError('Failed to load questions. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadQuestions();
+  }, [isPracticeMode]);
+
+  // Timer effect
+  useEffect(() => {
+    if (timeLeft > 0 && !isCompleted && !loading) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && !loading) {
       handleSubmit();
     }
-  }, [timeLeft, isCompleted]);
+  }, [timeLeft, isCompleted, loading]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -82,10 +73,26 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleAnswerSelect = (answerIndex: number) => {
+  const handleAnswerSelect = async (answerIndex: number) => {
     const newAnswers = [...selectedAnswers];
     newAnswers[currentQuestion] = answerIndex;
     setSelectedAnswers(newAnswers);
+
+    if (isPracticeMode) {
+      // In practice mode, show explanation immediately
+      const newShowExplanation = [...showExplanation];
+      newShowExplanation[currentQuestion] = true;
+      setShowExplanation(newShowExplanation);
+    } else if (testId) {
+      // In formal test mode, submit answer to backend
+      try {
+        const currentQ = questions[currentQuestion];
+        await aptitudeAPI.submitAnswer(testId, currentQ.id, answerIndex);
+      } catch (error) {
+        console.error('Error submitting answer:', error);
+        // Continue even if submission fails - we'll rely on local state
+      }
+    }
   };
 
   const handleNext = () => {
@@ -100,43 +107,40 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
     }
   };
 
-  const handleSubmit = () => {
-    const score = selectedAnswers.reduce((total, answer, index) => {
-      return total + (answer === questions[index].correct ? 1 : 0);
-    }, 0);
-    const percentage = Math.round((score / questions.length) * 100);
-    setTestScore(percentage);
-    
-    // Only save to history if not in practice mode
-    if (!isPracticeMode) {
-      const detailedResults = questions.map((question, index) => ({
-        question: question.question,
-        options: question.options,
-        selectedAnswer: selectedAnswers[index],
-        correctAnswer: question.correct,
-        isCorrect: selectedAnswers[index] === question.correct
-      }));
-
-      const newHistoryItem = {
-        id: Date.now().toString(),
-        type: 'aptitude' as const,
-        date: new Date().toISOString().split('T')[0],
-        score: percentage,
-        duration: `${Math.floor((1800 - timeLeft) / 60)}:${String((1800 - timeLeft) % 60).padStart(2, '0')}`,
-        status: 'completed' as const,
-        detailedResults: detailedResults
-      };
-
-      const savedHistory = localStorage.getItem('hiresight_history');
-      const historyItems = savedHistory ? JSON.parse(savedHistory) : [];
-      historyItems.unshift(newHistoryItem);
-      localStorage.setItem('hiresight_history', JSON.stringify(historyItems));
+  const handleSubmit = async () => {
+    if (isPracticeMode) {
+      // For practice mode, calculate score locally
+      const practiceQuestions = questions as AptitudePracticeQuestion[];
+      const score = selectedAnswers.reduce((total, answer, index) => {
+        return total + (answer === practiceQuestions[index].correctOption ? 1 : 0);
+      }, 0);
+      const percentage = Math.round((score / questions.length) * 100);
+      setTestScore(percentage);
+    } else if (testId) {
+      // For formal test, complete test on backend and fetch detailed results
+      try {
+        const timeTakenSeconds = 1800 - timeLeft; // Calculate time taken in seconds
+        const results = await aptitudeAPI.completeTest(testId, timeTakenSeconds);
+        setTestScore(results.overallScore);
+        
+        // Fetch detailed results for feedback display
+        const detailedResults = await aptitudeAPI.getTestResults(testId);
+        setDetailedAnswers(detailedResults.answers);
+      } catch (error) {
+        console.error('Error completing test:', error);
+        // Fallback to local calculation
+        const score = selectedAnswers.reduce((total, answer) => {
+          return total + (answer !== undefined ? 1 : 0); // Can't calculate accuracy without correct answers
+        }, 0);
+        const percentage = Math.round((score / questions.length) * 100);
+        setTestScore(percentage);
+      }
     }
     
     setIsCompleted(true);
   };
 
-  const progress = ((currentQuestion + 1) / questions.length) * 100;
+  const progress = questions.length > 0 ? ((currentQuestion + 1) / questions.length) * 100 : 0;
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -144,11 +148,64 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
     return 'text-red-600';
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen pt-20 pb-12 flex items-center justify-center">
+        <div className="text-center">
+          <Loader className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading {isPracticeMode ? 'practice' : 'test'} questions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen pt-20 pb-12 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-4">Error Loading Questions</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Completed state
   if (isCompleted) {
-    const score = selectedAnswers.reduce((total, answer, index) => {
-      return total + (answer === questions[index].correct ? 1 : 0);
-    }, 0);
-    const percentage = Math.round((score / questions.length) * 100);
+    const practiceQuestions = questions as AptitudePracticeQuestion[];
+    
+    // Calculate scores differently for practice vs formal tests
+    let score, totalQuestions, percentage;
+    
+    if (isPracticeMode) {
+      // For practice mode, calculate from local data
+      score = selectedAnswers.reduce((total, answer, index) => {
+        return total + (answer === practiceQuestions[index]?.correctOption ? 1 : 0);
+      }, 0);
+      totalQuestions = questions.length;
+      percentage = Math.round((score / totalQuestions) * 100);
+    } else {
+      // For formal tests, use the data from backend
+      if (detailedAnswers.length > 0) {
+        score = detailedAnswers.filter(answer => answer.isCorrect).length;
+        totalQuestions = detailedAnswers.length;
+        percentage = Math.round((score / totalQuestions) * 100);
+      } else {
+        // Fallback if detailed answers not available
+        score = selectedAnswers.filter(a => a !== undefined).length;
+        totalQuestions = questions.length;
+        percentage = Math.round((score / totalQuestions) * 100);
+      }
+    }
 
     return (
       <div className="min-h-screen pt-20 pb-12">
@@ -176,11 +233,11 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
                   </div>
                 )}
 
-                <div className="bg-gray-50 rounded-lg p-6 mb-6 border border-gray-200">
+                                <div className="bg-gray-50 rounded-lg p-6 mb-6 border border-gray-200">
                   <div className={`text-4xl font-bold mb-2 ${getScoreColor(percentage)}`}>{percentage}%</div>
                   <div className="text-gray-700 mb-2">Your Score</div>
                   <div className="text-sm text-gray-500">
-                    {score} out of {questions.length} questions correct
+                    {score} out of {totalQuestions} questions correct
                   </div>
                 </div>
                 
@@ -190,7 +247,7 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
                     <div className="text-sm text-green-700">Correct</div>
                   </div>
                   <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                    <div className="text-2xl font-bold text-red-600">{questions.length - score}</div>
+                    <div className="text-2xl font-bold text-red-600">{totalQuestions - score}</div>
                     <div className="text-sm text-red-700">Incorrect</div>
                   </div>
                   <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -198,14 +255,16 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
                     <div className="text-sm text-blue-700">Time Taken</div>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="text-2xl font-bold text-gray-600">{Math.round((1800 - timeLeft) / questions.length)}s</div>
+                    <div className="text-2xl font-bold text-gray-600">
+                      {Math.round((1800 - timeLeft) / totalQuestions)}s
+                    </div>
                     <div className="text-sm text-gray-700">Avg/Question</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Detailed Question Breakdown */}
+            {/* Detailed Question Breakdown - Show for both practice and formal tests */}
             <div className="bg-white border-2 border-gray-200 rounded-xl p-6 mb-8 shadow-lg">
               <h3 className="text-2xl font-bold mb-6 flex items-center">
                 <BarChart3 className="h-6 w-6 mr-2" />
@@ -213,83 +272,170 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
               </h3>
               
               <div className="space-y-6">
-                {questions.map((question, index) => {
-                  const isCorrect = selectedAnswers[index] === question.correct;
-                  const selectedOption = selectedAnswers[index];
-                  
-                  return (
-                    <div key={index} className={`border-2 rounded-lg p-6 ${
-                      isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
-                    }`}>
-                      <div className="flex items-start justify-between mb-4">
-                        <h4 className="font-semibold text-lg flex items-center">
-                          <span className="mr-3">Q{index + 1}.</span>
-                          {question.question}
-                        </h4>
-                        <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          isCorrect 
-                            ? 'bg-green-100 text-green-800 border border-green-200' 
-                            : 'bg-red-100 text-red-800 border border-red-200'
-                        }`}>
-                          {isCorrect ? 'Correct' : 'Incorrect'}
-                        </div>
-                      </div>
-                      
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <h5 className="font-medium text-gray-700 mb-3">Answer Options:</h5>
-                          <div className="space-y-2">
-                            {question.options.map((option, optIndex) => (
-                              <div key={optIndex} className={`p-3 rounded border-2 text-sm ${
-                                optIndex === question.correct 
-                                  ? 'border-green-400 bg-green-100 text-green-800' 
-                                  : optIndex === selectedOption && !isCorrect
-                                  ? 'border-red-400 bg-red-100 text-red-800'
-                                  : 'border-gray-200 bg-white text-gray-700'
-                              }`}>
-                                <div className="flex items-center space-x-2">
-                                  <span className="font-medium">{String.fromCharCode(65 + optIndex)}.</span>
-                                  <span>{option}</span>
-                                  {optIndex === question.correct && (
-                                    <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />
-                                  )}
-                                  {optIndex === selectedOption && !isCorrect && (
-                                    <AlertCircle className="h-4 w-4 text-red-600 ml-auto" />
-                                  )}
-                                </div>
-                              </div>
-                            ))}
+                {isPracticeMode ? (
+                  // Practice mode: use practice questions with explanations
+                  practiceQuestions.map((question, index) => {
+                    const isCorrect = selectedAnswers[index] === question.correctOption;
+                    const selectedOption = selectedAnswers[index];
+                    
+                    return (
+                      <div key={index} className={`border-2 rounded-lg p-6 ${
+                        isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                      }`}>
+                        <div className="flex items-start justify-between mb-4">
+                          <h4 className="font-semibold text-lg flex items-center">
+                            <span className="mr-3">Q{index + 1}.</span>
+                            {question.questionText}
+                          </h4>
+                          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            isCorrect 
+                              ? 'bg-green-100 text-green-800 border border-green-200' 
+                              : 'bg-red-100 text-red-800 border border-red-200'
+                          }`}>
+                            {isCorrect ? 'Correct' : 'Incorrect'}
                           </div>
                         </div>
                         
-                        <div>
-                          <div className="space-y-3">
-                            <div>
-                              <span className="font-medium text-gray-700">Your Answer: </span>
-                              <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                                {selectedOption !== undefined ? String.fromCharCode(65 + selectedOption) : 'Not answered'}
-                              </span>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <h5 className="font-medium text-gray-700 mb-3">Answer Options:</h5>
+                            <div className="space-y-2">
+                              {question.options.map((option, optIndex) => (
+                                <div key={optIndex} className={`p-3 rounded border-2 text-sm ${
+                                  optIndex === question.correctOption 
+                                    ? 'border-green-400 bg-green-100 text-green-800' 
+                                    : optIndex === selectedOption && !isCorrect
+                                    ? 'border-red-400 bg-red-100 text-red-800'
+                                    : 'border-gray-200 bg-white text-gray-700'
+                                }`}>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="font-medium">{String.fromCharCode(65 + optIndex)}.</span>
+                                    <span>{option}</span>
+                                    {optIndex === question.correctOption && (
+                                      <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />
+                                    )}
+                                    {optIndex === selectedOption && !isCorrect && (
+                                      <AlertCircle className="h-4 w-4 text-red-600 ml-auto" />
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Correct Answer: </span>
-                              <span className="font-medium text-green-600">
-                                {String.fromCharCode(65 + question.correct)}
-                              </span>
-                            </div>
-                            {!isCorrect && (
+                          </div>
+                          
+                          <div>
+                            <div className="space-y-3">
+                              <div>
+                                <span className="font-medium text-gray-700">Your Answer: </span>
+                                <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                                  {selectedOption !== undefined ? String.fromCharCode(65 + selectedOption) : 'Not answered'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-700">Correct Answer: </span>
+                                <span className="font-medium text-green-600">
+                                  {String.fromCharCode(65 + question.correctOption)}
+                                </span>
+                              </div>
                               <div className="bg-gray-100 border border-black rounded p-3 mt-3">
                                 <p className="text-sm text-black">
-                                  <strong>Explanation:</strong> The correct answer is "{question.options[question.correct]}" 
-                                  because it represents the most accurate solution to this problem.
+                                  <strong>Explanation:</strong> {question.explanation}
                                 </p>
                               </div>
-                            )}
+                            </div>
                           </div>
                         </div>
                       </div>
+                    );
+                  })
+                ) : (
+                  // Formal test mode: use detailed answers from backend
+                  detailedAnswers.length > 0 ? (
+                    detailedAnswers.map((answer, index) => {
+                      const isCorrect = answer.isCorrect;
+                      const selectedOption = answer.selectedOption;
+                      
+                      return (
+                        <div key={index} className={`border-2 rounded-lg p-6 ${
+                          isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                        }`}>
+                          <div className="flex items-start justify-between mb-4">
+                            <h4 className="font-semibold text-lg flex items-center">
+                              <span className="mr-3">Q{index + 1}.</span>
+                              {answer.questionText}
+                            </h4>
+                            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              isCorrect 
+                                ? 'bg-green-100 text-green-800 border border-green-200' 
+                                : 'bg-red-100 text-red-800 border border-red-200'
+                            }`}>
+                              {isCorrect ? 'Correct' : 'Incorrect'}
+                            </div>
+                          </div>
+                          
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              <h5 className="font-medium text-gray-700 mb-3">Answer Options:</h5>
+                              <div className="space-y-2">
+                                {answer.options.map((option: string, optIndex: number) => (
+                                  <div key={optIndex} className={`p-3 rounded border-2 text-sm ${
+                                    optIndex === answer.correctOption 
+                                      ? 'border-green-400 bg-green-100 text-green-800' 
+                                      : optIndex === selectedOption && !isCorrect
+                                      ? 'border-red-400 bg-red-100 text-red-800'
+                                      : 'border-gray-200 bg-white text-gray-700'
+                                  }`}>
+                                    <div className="flex items-center space-x-2">
+                                      <span className="font-medium">{String.fromCharCode(65 + optIndex)}.</span>
+                                      <span>{option}</span>
+                                      {optIndex === answer.correctOption && (
+                                        <CheckCircle className="h-4 w-4 text-green-600 ml-auto" />
+                                      )}
+                                      {optIndex === selectedOption && !isCorrect && (
+                                        <AlertCircle className="h-4 w-4 text-red-600 ml-auto" />
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <div className="space-y-3">
+                                <div>
+                                  <span className="font-medium text-gray-700">Your Answer: </span>
+                                  <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                                    {selectedOption !== undefined ? String.fromCharCode(65 + selectedOption) : 'Not answered'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="font-medium text-gray-700">Correct Answer: </span>
+                                  <span className="font-medium text-green-600">
+                                    {String.fromCharCode(65 + answer.correctOption)}
+                                  </span>
+                                </div>
+                                <div className="bg-gray-100 border border-black rounded p-3 mt-3">
+                                  <p className="text-sm text-black">
+                                    <strong>Category:</strong> {answer.category.replace('_', ' ')}
+                                  </p>
+                                  <p className="text-sm text-black mt-2">
+                                    <strong>Explanation:</strong> The correct answer is "{answer.options[answer.correctOption]}" because it represents the most accurate solution for this {answer.category.toLowerCase().replace('_', ' ')} question.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    // Fallback: Loading state for detailed results
+                    <div className="text-center py-8">
+                      <Loader className="h-8 w-8 animate-spin mx-auto mb-4" />
+                      <p className="text-gray-600">Loading detailed results...</p>
                     </div>
-                  );
-                })}
+                  )
+                )}
               </div>
             </div>
 
@@ -298,7 +444,7 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
               {isPracticeMode ? (
                 <>
                   <button
-                    onClick={() => onNavigate('practice-aptitude')}
+                    onClick={() => window.location.reload()}
                     className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-200 hover:scale-105"
                   >
                     <span>Practice Again</span>
@@ -373,10 +519,10 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
 
           {/* Question */}
           <div className="bg-white border-2 border-gray-200 rounded-xl p-8 mb-8 shadow-lg">
-            <h2 className="text-xl font-semibold mb-6">{questions[currentQuestion].question}</h2>
+            <h2 className="text-xl font-semibold mb-6">{questions[currentQuestion]?.questionText}</h2>
             
             <div className="space-y-4">
-              {questions[currentQuestion].options.map((option, index) => (
+              {questions[currentQuestion]?.options.map((option, index) => (
                 <button
                   key={index}
                   onClick={() => handleAnswerSelect(index)}
@@ -397,6 +543,24 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
                 </button>
               ))}
             </div>
+
+            {/* Show explanation in practice mode after selecting an answer */}
+            {isPracticeMode && showExplanation[currentQuestion] && (
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <h3 className="font-semibold text-blue-800">Explanation</h3>
+                    <p className="text-blue-700 mt-1">
+                      <strong>Correct Answer:</strong> {questions[currentQuestion]?.options[(questions[currentQuestion] as AptitudePracticeQuestion)?.correctOption]}
+                    </p>
+                    <p className="text-blue-700 mt-2">
+                      {(questions[currentQuestion] as AptitudePracticeQuestion)?.explanation}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Navigation */}

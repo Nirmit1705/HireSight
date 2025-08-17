@@ -175,8 +175,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, initial
       }
 
       // Store token if provided
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
+      if (data.data?.accessToken) {
+        localStorage.setItem('authToken', data.data.accessToken);
       }
 
       // Only call onLogin and onClose on successful authentication

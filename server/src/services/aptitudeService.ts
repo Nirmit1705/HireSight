@@ -12,8 +12,36 @@ export class AptitudeService {
 
   async getRandomQuestions(position: Position, limit: number = 30): Promise<AptitudeQuestionForFrontend[]> {
     try {
-      // Get all questions and shuffle them randomly
+      // Map position enum to tags
+      const positionTagMap = {
+        [Position.BACKEND_DEVELOPER]: ['backend', 'full-stack'],
+        [Position.FRONTEND_DEVELOPER]: ['frontend', 'full-stack'],
+        [Position.FULL_STACK_DEVELOPER]: ['backend', 'frontend', 'full-stack'],
+        [Position.DATA_ANALYST]: ['data', 'backend'],
+        [Position.AI_ML]: ['aiml', 'data'],
+        [Position.CLOUD]: ['cloud', 'backend']
+      };
+
+      const relevantTags = positionTagMap[position] || [];
+      
+      // Get questions that match the position tags or general questions
       const allQuestions = await this.prisma.aptitudeQuestion.findMany({
+        where: {
+          OR: [
+            // Questions with relevant tags for the position
+            {
+              tags: {
+                hasSome: relevantTags
+              }
+            },
+            // Include general questions that have all position tags (applicable to all)
+            {
+              tags: {
+                hasEvery: ['frontend', 'backend', 'full-stack', 'data', 'aiml', 'cloud']
+              }
+            }
+          ]
+        },
         select: {
           id: true,
           questionText: true,
@@ -22,6 +50,26 @@ export class AptitudeService {
           difficulty: true
         }
       });
+
+      // If we don't have enough position-specific questions, get some general ones
+      if (allQuestions.length < limit) {
+        const additionalQuestions = await this.prisma.aptitudeQuestion.findMany({
+          where: {
+            id: {
+              notIn: allQuestions.map(q => q.id)
+            }
+          },
+          select: {
+            id: true,
+            questionText: true,
+            options: true,
+            category: true,
+            difficulty: true
+          },
+          take: limit - allQuestions.length
+        });
+        allQuestions.push(...additionalQuestions);
+      }
 
       // Shuffle the questions randomly
       const shuffledQuestions = this.shuffleArray(allQuestions);
@@ -36,17 +84,68 @@ export class AptitudeService {
 
   async getPracticeQuestions(position: Position, limit: number = 10): Promise<AptitudeQuestionForPractice[]> {
     try {
-      // Get all questions with correct answers for practice mode
+      // Map position enum to tags
+      const positionTagMap = {
+        [Position.BACKEND_DEVELOPER]: ['backend', 'full-stack'],
+        [Position.FRONTEND_DEVELOPER]: ['frontend', 'full-stack'],
+        [Position.FULL_STACK_DEVELOPER]: ['backend', 'frontend', 'full-stack'],
+        [Position.DATA_ANALYST]: ['data', 'backend'],
+        [Position.AI_ML]: ['aiml', 'data'],
+        [Position.CLOUD]: ['cloud', 'backend']
+      };
+
+      const relevantTags = positionTagMap[position] || [];
+      
+      // Get questions that match the position tags or general questions
       const allQuestions = await this.prisma.aptitudeQuestion.findMany({
+        where: {
+          OR: [
+            // Questions with relevant tags for the position
+            {
+              tags: {
+                hasSome: relevantTags
+              }
+            },
+            // Include general questions that have all position tags (applicable to all)
+            {
+              tags: {
+                hasEvery: ['frontend', 'backend', 'full-stack', 'data', 'aiml', 'cloud']
+              }
+            }
+          ]
+        },
         select: {
           id: true,
           questionText: true,
           options: true,
           correctOption: true,
           category: true,
-          difficulty: true
+          difficulty: true,
+          explanation: true
         }
       });
+
+      // If we don't have enough position-specific questions, get some general ones
+      if (allQuestions.length < limit) {
+        const additionalQuestions = await this.prisma.aptitudeQuestion.findMany({
+          where: {
+            id: {
+              notIn: allQuestions.map(q => q.id)
+            }
+          },
+          select: {
+            id: true,
+            questionText: true,
+            options: true,
+            correctOption: true,
+            category: true,
+            difficulty: true,
+            explanation: true
+          },
+          take: limit - allQuestions.length
+        });
+        allQuestions.push(...additionalQuestions);
+      }
 
       // Shuffle the questions randomly
       const shuffledQuestions = this.shuffleArray(allQuestions);
@@ -54,7 +153,7 @@ export class AptitudeService {
       // Take the first 'limit' questions and add explanations
       return shuffledQuestions.slice(0, Math.min(limit, shuffledQuestions.length)).map(q => ({
         ...q,
-        explanation: `The correct answer is "${q.options[q.correctOption]}" because it represents the most accurate solution for this ${q.category.toLowerCase().replace('_', ' ')} question.`
+        explanation: q.explanation || `The correct answer is "${q.options[q.correctOption]}" because it represents the most accurate solution for this ${q.category.toLowerCase().replace('_', ' ')} question.`
       }));
     } catch (error) {
       console.error('Error fetching practice questions:', error);
@@ -93,16 +192,40 @@ export class AptitudeService {
 
       const isCorrect = selectedOption === question.correctOption;
 
-      // Save the answer
-      return await this.prisma.aptitudeTestAnswer.create({
-        data: {
+      // Use upsert to either update existing answer or create new one
+      // This ensures only one answer per question per test
+      
+      // First check if answer already exists
+      const existingAnswer = await this.prisma.aptitudeTestAnswer.findFirst({
+        where: {
           testId,
-          questionId,
-          selectedOption,
-          isCorrect,
-          correctOption: question.correctOption
+          questionId
         }
       });
+
+      if (existingAnswer) {
+        // Update existing answer
+        return await this.prisma.aptitudeTestAnswer.update({
+          where: { id: existingAnswer.id },
+          data: {
+            selectedOption,
+            isCorrect,
+            correctOption: question.correctOption,
+            createdAt: new Date()
+          }
+        });
+      } else {
+        // Create new answer
+        return await this.prisma.aptitudeTestAnswer.create({
+          data: {
+            testId,
+            questionId,
+            selectedOption,
+            isCorrect,
+            correctOption: question.correctOption
+          }
+        });
+      }
     } catch (error) {
       console.error('Error submitting answer:', error);
       throw new Error('Failed to submit answer');
@@ -124,9 +247,9 @@ export class AptitudeService {
       // Calculate scores by category
       const categoryScores = this.calculateCategoryScores(answers);
 
-      // Calculate overall score
+      // Calculate overall score and round to 0 decimal places
       const correctAnswers = answers.filter(answer => answer.isCorrect).length;
-      const overallScore = (correctAnswers / answers.length) * 100;
+      const overallScore = Math.round((correctAnswers / answers.length) * 100);
 
       // Update the test with completion data
       return await this.prisma.aptitudeTest.update({
@@ -196,7 +319,9 @@ export class AptitudeService {
           domainKnowledgeScore: true,
           quantitativeScore: true,
           logicalReasoningScore: true,
-          verbalAbilityScore: true
+          verbalAbilityScore: true,
+          status: true,
+          isPractice: true
         }
       });
 
@@ -224,19 +349,19 @@ export class AptitudeService {
       }
     });
 
-    // Calculate percentages
+    // Calculate percentages and round to 0 decimal places
     const scores = {
       DOMAIN_KNOWLEDGE: categoryStats.DOMAIN_KNOWLEDGE.total > 0 
-        ? (categoryStats.DOMAIN_KNOWLEDGE.correct / categoryStats.DOMAIN_KNOWLEDGE.total) * 100 
+        ? Math.round((categoryStats.DOMAIN_KNOWLEDGE.correct / categoryStats.DOMAIN_KNOWLEDGE.total) * 100)
         : 0,
       QUANTITATIVE_APTITUDE: categoryStats.QUANTITATIVE_APTITUDE.total > 0 
-        ? (categoryStats.QUANTITATIVE_APTITUDE.correct / categoryStats.QUANTITATIVE_APTITUDE.total) * 100 
+        ? Math.round((categoryStats.QUANTITATIVE_APTITUDE.correct / categoryStats.QUANTITATIVE_APTITUDE.total) * 100)
         : 0,
       LOGICAL_REASONING: categoryStats.LOGICAL_REASONING.total > 0 
-        ? (categoryStats.LOGICAL_REASONING.correct / categoryStats.LOGICAL_REASONING.total) * 100 
+        ? Math.round((categoryStats.LOGICAL_REASONING.correct / categoryStats.LOGICAL_REASONING.total) * 100)
         : 0,
       VERBAL_ABILITY: categoryStats.VERBAL_ABILITY.total > 0 
-        ? (categoryStats.VERBAL_ABILITY.correct / categoryStats.VERBAL_ABILITY.total) * 100 
+        ? Math.round((categoryStats.VERBAL_ABILITY.correct / categoryStats.VERBAL_ABILITY.total) * 100)
         : 0
     };
 

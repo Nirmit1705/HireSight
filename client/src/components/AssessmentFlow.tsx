@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Target, Trophy, ArrowRight, CheckCircle, Brain, Video } from 'lucide-react';
 import { PageType } from '../App';
+import { aptitudeAPI } from '../services/aptitudeAPI';
 
 interface AssessmentFlowProps {
   onNavigate: (page: PageType) => void;
@@ -8,20 +9,42 @@ interface AssessmentFlowProps {
 }
 
 const AssessmentFlow: React.FC<AssessmentFlowProps> = ({ onNavigate, hasPreviousScore }) => {
-  // Get the latest aptitude score from localStorage
-  const getLatestAptitudeScore = () => {
-    const savedHistory = localStorage.getItem('hiresight_history');
-    if (savedHistory) {
-      const historyItems = JSON.parse(savedHistory);
-      const aptitudeTests = historyItems.filter((item: any) => item.type === 'aptitude' && item.status === 'completed');
-      if (aptitudeTests.length > 0) {
-        return aptitudeTests[0].score; // First item is the most recent
-      }
-    }
-    return null;
-  };
+  const [latestScore, setLatestScore] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const latestScore = getLatestAptitudeScore();
+  // Get the latest aptitude score from database
+  useEffect(() => {
+    const fetchLatestScore = async () => {
+      try {
+        const testHistory = await aptitudeAPI.getTestHistory();
+        // The API already filters for completed tests and non-practice tests
+        if (testHistory.length > 0) {
+          // Get the most recent completed test score (they're already sorted by completedAt desc)
+          const mostRecent = testHistory[0];
+          setLatestScore(Math.round(mostRecent.overallScore));
+        }
+      } catch (error) {
+        console.error('Error fetching latest score:', error);
+        // Fallback to localStorage
+        const savedHistory = localStorage.getItem('hiresight_history');
+        if (savedHistory) {
+          const historyItems = JSON.parse(savedHistory);
+          const aptitudeTests = historyItems.filter((item: any) => item.type === 'aptitude' && item.status === 'completed');
+          if (aptitudeTests.length > 0) {
+            setLatestScore(aptitudeTests[0].score);
+          }
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (hasPreviousScore) {
+      fetchLatestScore();
+    } else {
+      setIsLoading(false);
+    }
+  }, [hasPreviousScore]);
 
   const assessmentOptions = [
     {
@@ -34,7 +57,7 @@ const AssessmentFlow: React.FC<AssessmentFlowProps> = ({ onNavigate, hasPrevious
     }
   ];
 
-  if (hasPreviousScore) {
+  if (hasPreviousScore && !isLoading && latestScore !== null) {
     assessmentOptions.unshift({
       id: 'continue-assessment',
       title: 'Continue with Previous Score',
@@ -62,6 +85,15 @@ const AssessmentFlow: React.FC<AssessmentFlowProps> = ({ onNavigate, hasPrevious
 
           {/* Assessment Flow Options */}
           <div className="space-y-6">
+            {hasPreviousScore && isLoading && (
+              <div className="bg-white border-2 border-gray-200 rounded-xl p-8">
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
+                  <span className="text-gray-600">Loading your previous score...</span>
+                </div>
+              </div>
+            )}
+            
             {assessmentOptions.map((option) => (
               <div
                 key={option.id}

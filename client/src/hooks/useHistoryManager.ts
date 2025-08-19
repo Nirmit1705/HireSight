@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AppState } from '../context/AppStateContext';
+import { aptitudeAPI } from '../services/aptitudeAPI';
 
 export const useHistoryManager = (appState: AppState, isAuthenticated: boolean) => {
   const location = useLocation();
@@ -8,12 +9,26 @@ export const useHistoryManager = (appState: AppState, isAuthenticated: boolean) 
 
   useEffect(() => {
     if (isAuthenticated) {
-      const savedHistory = localStorage.getItem('hiresight_history');
-      if (savedHistory) {
-        const historyItems = JSON.parse(savedHistory);
-        const hasAptitudeScore = historyItems.some((item: any) => item.type === 'aptitude' && item.status === 'completed');
-        appState.setHasPreviousAptitudeScore(hasAptitudeScore);
-      }
+      // Check for previous aptitude scores from database
+      const checkPreviousScores = async () => {
+        try {
+          const testHistory = await aptitudeAPI.getTestHistory();
+          // The API already filters for completed tests and non-practice tests
+          const hasCompletedAptitudeTest = testHistory.length > 0;
+          appState.setHasPreviousAptitudeScore(hasCompletedAptitudeTest);
+        } catch (error) {
+          console.error('Error fetching test history:', error);
+          // Fallback to localStorage if API fails
+          const savedHistory = localStorage.getItem('hiresight_history');
+          if (savedHistory) {
+            const historyItems = JSON.parse(savedHistory);
+            const hasAptitudeScore = historyItems.some((item: any) => item.type === 'aptitude' && item.status === 'completed');
+            appState.setHasPreviousAptitudeScore(hasAptitudeScore);
+          }
+        }
+      };
+
+      checkPreviousScores();
     }
   }, [isAuthenticated, appState]);
 

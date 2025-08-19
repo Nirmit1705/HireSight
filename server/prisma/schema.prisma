@@ -146,6 +146,8 @@ model AptitudeTestAnswer {
   
   createdAt       DateTime @default(now())
   
+  // Ensure only one answer per test and question combination
+  @@unique([testId, questionId])
   @@map("aptitude_test_answers")
 }
 

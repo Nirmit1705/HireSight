@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Target, TrendingUp, Award, AlertCircle, CheckCircle, ArrowLeft, ArrowRight, RefreshCw, Clock, Loader } from 'lucide-react';
+import { BarChart3, Target, Award, AlertCircle, CheckCircle, ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { PageType } from '../App';
 import RadarChart from './RadarChart';
 import { aptitudeAPI } from '../services/aptitudeAPI';
@@ -17,9 +17,15 @@ interface HistoryItem {
   position?: string;
   domain?: string;
   duration?: string;
+  timeTaken?: number; // Time taken in seconds
   status: 'completed' | 'in-progress';
   testScore?: number;
   interviewScore?: number;
+  // Aptitude-specific scores
+  domainKnowledgeScore?: number;
+  quantitativeScore?: number;
+  verbalAbilityScore?: number;
+  logicalReasoningScore?: number;
   detailedResults?: Array<{
     question: string;
     options: string[];
@@ -31,8 +37,6 @@ interface HistoryItem {
 
 const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) => {
   const [historyItem, setHistoryItem] = useState<HistoryItem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -70,9 +74,6 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
 
   const loadHistoryDetail = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
       // First, try to get the item from the aptitude history API
       try {
         const aptitudeHistory = await aptitudeAPI.getTestHistory();
@@ -89,7 +90,13 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
             score: Math.round(aptitudeItem.overallScore || 0),
             position: aptitudeItem.position,
             duration: aptitudeItem.timeTaken ? formatDuration(aptitudeItem.timeTaken) : '0:00',
+            timeTaken: aptitudeItem.timeTaken, // Add raw time taken in seconds
             status: 'completed',
+            // Include category scores
+            domainKnowledgeScore: aptitudeItem.domainKnowledgeScore,
+            quantitativeScore: aptitudeItem.quantitativeScore,
+            verbalAbilityScore: aptitudeItem.verbalAbilityScore,
+            logicalReasoningScore: aptitudeItem.logicalReasoningScore,
             detailedResults: detailedResults.answers.map(answer => ({
               question: answer.questionText,
               options: answer.options,
@@ -138,13 +145,10 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
         return;
       }
 
-      // If not found anywhere, set error
-      setError('History item not found');
+      // If not found anywhere, history item remains null
     } catch (err) {
       console.error('Error loading history detail:', err);
-      setError('Failed to load history details');
-    } finally {
-      setLoading(false);
+      // History item remains null on error
     }
   };
 
@@ -175,6 +179,19 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
     const correctAnswers = historyItem.detailedResults?.filter(r => r.isCorrect).length || 0;
     const totalQuestions = historyItem.detailedResults?.length || 0;
     const incorrectAnswers = totalQuestions - correctAnswers;
+
+    // Get actual scores from the aptitude item (from database)
+    const technicalScore = historyItem.domainKnowledgeScore || 0;
+    const quantitativeScore = historyItem.quantitativeScore || 0;
+    const verbalScore = historyItem.verbalAbilityScore || 0;
+    const logicalScore = historyItem.logicalReasoningScore || 0;
+
+    const radarData = [
+      { label: 'Technical Knowledge', value: technicalScore },
+      { label: 'Quantitative', value: quantitativeScore },
+      { label: 'Verbal', value: verbalScore },
+      { label: 'Logical Reasoning', value: logicalScore }
+    ];
 
     return (
       <div className="min-h-screen pt-20 pb-12">
@@ -317,66 +334,48 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
               </div>
             )}
 
-            {/* Performance Analysis */}
-            <div className="grid lg:grid-cols-2 gap-8 mb-8">
-              {/* Subject-wise Performance */}
-              <div className="bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">
-                <div className="flex items-center space-x-2 mb-6">
-                  <Target className="h-6 w-6 text-black" />
-                  <h2 className="text-2xl font-bold">Subject-wise Analysis</h2>
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">Technical Knowledge</span>
-                    <span className={`font-bold ${getScoreColor(85)}`}>85%</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">Logical Reasoning</span>
-                    <span className={`font-bold ${getScoreColor(78)}`}>78%</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">Problem Solving</span>
-                    <span className={`font-bold ${getScoreColor(72)}`}>72%</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                    <span className="font-medium">Analytical Skills</span>
-                    <span className={`font-bold ${getScoreColor(80)}`}>80%</span>
-                  </div>
-                </div>
+            {/* Performance Radar Chart */}
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-6 mb-8 shadow-lg">
+              <div className="flex items-center space-x-2 mb-6">
+                <Target className="h-6 w-6 text-black" />
+                <h2 className="text-2xl font-bold">Performance Radar</h2>
               </div>
-
-              {/* Time Analysis */}
-              <div className="bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">
-                <div className="flex items-center space-x-2 mb-6">
-                  <Clock className="h-6 w-6 text-black" />
-                  <h2 className="text-2xl font-bold">Time Analysis</h2>
+              
+              <div className="grid lg:grid-cols-2 gap-8 items-center">
+                <div className="flex justify-center">
+                  <RadarChart data={radarData} size={350} />
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center">
-                      <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                      <span className="font-medium text-green-800">Good time management</span>
+                  <h3 className="text-lg font-semibold mb-4">Subject-wise Performance</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium">Technical Knowledge</span>
+                      <span className={`font-bold ${getScoreColor(technicalScore)}`}>{technicalScore}%</span>
                     </div>
-                    <p className="text-sm text-green-700 mt-1">
-                      You completed the test within the allocated time
-                    </p>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium">Quantitative</span>
+                      <span className={`font-bold ${getScoreColor(quantitativeScore)}`}>{quantitativeScore}%</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium">Verbal</span>
+                      <span className={`font-bold ${getScoreColor(verbalScore)}`}>{verbalScore}%</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium">Logical Reasoning</span>
+                      <span className={`font-bold ${getScoreColor(logicalScore)}`}>{logicalScore}%</span>
+                    </div>
                   </div>
                   
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Average time per question:</span>
-                      <span className="font-medium">1m 42s</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Fastest question:</span>
-                      <span className="font-medium">32s</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Slowest question:</span>
-                      <span className="font-medium">3m 15s</span>
-                    </div>
+                  <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h4 className="font-semibold text-blue-900 mb-2">Time Management Analysis</h4>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• Completed test in {historyItem.duration || 'N/A'}</li>
+                      <li>• Average time per question: {historyItem.timeTaken ? Math.round(historyItem.timeTaken / totalQuestions) : 'N/A'} seconds</li>
+                      <li>• Good pacing maintained throughout the test</li>
+                      <li>• Test completed within allocated time limit</li>
+                      <li>• Efficient time utilization for optimal performance</li>
+                    </ul>
                   </div>
                 </div>
               </div>

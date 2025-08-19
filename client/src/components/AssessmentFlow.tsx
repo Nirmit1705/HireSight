@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Trophy, ArrowRight, CheckCircle, Brain, Video } from 'lucide-react';
+import { Target, Trophy, ArrowRight, CheckCircle, Brain } from 'lucide-react';
 import { PageType } from '../App';
 import { aptitudeAPI } from '../services/aptitudeAPI';
 

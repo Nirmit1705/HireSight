@@ -192,6 +192,10 @@ export const aptitudeAPI = {
     timeTaken: number;
     completedAt: string;
     status: string;
+    domainKnowledgeScore: number;
+    quantitativeScore: number;
+    logicalReasoningScore: number;
+    verbalAbilityScore: number;
   }>> {
     try {
       const response = await api.get('/aptitude/history');

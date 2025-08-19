@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth';
+import aptitudeRoutes from './routes/aptitude';
 import interviewRoutes from './routes/interview';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import passport from './config/passport';
@@ -35,6 +36,7 @@ app.use(passport.initialize());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/aptitude', aptitudeRoutes);
 app.use('/api/interviews', interviewRoutes);
 
 // Error handling middleware
@@ -57,7 +59,13 @@ const startServer = async () => {
   }
 };
 
-startServer();
+// Only start server if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+// Export app for testing
+export default app;
 
 // Graceful shutdown
 process.on('SIGINT', async () => {

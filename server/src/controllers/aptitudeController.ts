@@ -20,7 +20,7 @@ export class AptitudeController {
 
   async getQuestions(req: Request, res: Response) {
     try {
-      const { position } = req.query;
+      const { position, limit } = req.query;
       const userId = (req as any).user?.id;
 
       if (!userId) {
@@ -37,7 +37,8 @@ export class AptitudeController {
         });
       }
 
-      const questions = await this.aptitudeService.getRandomQuestions(position as Position, 30);
+      const questionLimit = limit ? parseInt(limit as string, 10) : 30;
+      const questions = await this.aptitudeService.getRandomQuestions(position as Position, questionLimit);
 
       res.json({
         success: true,

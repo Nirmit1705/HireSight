@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, Code, Database, Briefcase, PieChart, Users, Settings } from 'lucide-react';
 import { PageType } from '../App';
+import { metadataAPI, Position, Domain } from '../services/metadataAPI';
 
 interface PositionSelectionProps {
   onNavigate: (page: PageType) => void;
@@ -19,23 +20,41 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
   setSelectedDomain,
   isAssessmentMode = false
 }) => {
-  const positions = [
-    { id: 'frontend', title: 'Frontend Developer', icon: Code, description: 'React, Vue, Angular, HTML/CSS' },
-    { id: 'backend', title: 'Backend Developer', icon: Database, description: 'Node.js, Python, Java, APIs' },
-    { id: 'fullstack', title: 'Full Stack Developer', icon: Settings, description: 'Frontend + Backend expertise' },
-    { id: 'data-analyst', title: 'Data Analyst', icon: PieChart, description: 'SQL, Python, Data Visualization' },
-    { id: 'product-manager', title: 'Product Manager', icon: Briefcase, description: 'Strategy, Roadmaps, Analytics' },
-    { id: 'hr-specialist', title: 'HR Specialist', icon: Users, description: 'Recruitment, Employee Relations' },
-  ];
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const domains = [
-    { id: 'technology', title: 'Technology' },
-    { id: 'finance', title: 'Finance' },
-    { id: 'healthcare', title: 'Healthcare' },
-    { id: 'education', title: 'Education' },
-    { id: 'marketing', title: 'Marketing' },
-    { id: 'consulting', title: 'Consulting' },
-  ];
+  // Icon mapping for positions
+  const iconMap: { [key: string]: any } = {
+    'Code': Code,
+    'Database': Database,
+    'Settings': Settings,
+    'PieChart': PieChart,
+    'Briefcase': Briefcase,
+    'Users': Users
+  };
+
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        setLoading(true);
+        const [positionsData, domainsData] = await Promise.all([
+          metadataAPI.getPositions(),
+          metadataAPI.getDomains()
+        ]);
+        setPositions(positionsData);
+        setDomains(domainsData);
+      } catch (err) {
+        console.error('Error fetching metadata:', err);
+        setError('Failed to load positions and domains');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMetadata();
+  }, []);
 
   const handleProceed = () => {
     if (selectedPosition && selectedDomain) {
@@ -71,65 +90,80 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
           {/* Position Selection */}
           <div className="mb-12">
             <h2 className="text-2xl font-semibold mb-6">Position</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {positions.map((position) => (
-                <div
-                  key={position.id}
-                  onClick={() => setSelectedPosition(position.id)}
-                  className={`cursor-pointer p-6 rounded-xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-lg ${
-                    selectedPosition === position.id
-                      ? 'border-black bg-gray-50'
-                      : 'border-gray-200 bg-white hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className={`p-2 rounded-lg ${
-                      selectedPosition === position.id ? 'bg-black' : 'bg-gray-100'
-                    }`}>
-                      <position.icon className={`h-6 w-6 ${
-                        selectedPosition === position.id ? 'text-white' : 'text-black'
-                      }`} />
+            {loading ? (
+              <div className="text-center">Loading positions...</div>
+            ) : error ? (
+              <div className="text-center text-red-600">{error}</div>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {positions.map((position) => {
+                  const IconComponent = iconMap[position.icon] || Code;
+                  return (
+                    <div
+                      key={position.id}
+                      onClick={() => setSelectedPosition(position.id)}
+                      className={`cursor-pointer p-6 rounded-xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-lg ${
+                        selectedPosition === position.id
+                          ? 'border-black bg-gray-50'
+                          : 'border-gray-200 bg-white hover:border-gray-400'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3 mb-3">
+                        <div className={`p-2 rounded-lg ${
+                          selectedPosition === position.id ? 'bg-black' : 'bg-gray-100'
+                        }`}>
+                          <IconComponent className={`h-6 w-6 ${
+                            selectedPosition === position.id ? 'text-white' : 'text-black'
+                          }`} />
+                        </div>
+                        <h3 className="text-lg font-semibold">{position.title}</h3>
+                      </div>
+                      <p className="text-gray-600 text-sm">{position.description}</p>
                     </div>
-                    <h3 className="text-lg font-semibold">{position.title}</h3>
-                  </div>
-                  <p className="text-gray-600 text-sm">{position.description}</p>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Domain Selection */}
           <div className="mb-12">
             <h2 className="text-2xl font-semibold mb-6">Domain</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {domains.map((domain) => (
-                <div
-                  key={domain.id}
-                  onClick={() => setSelectedDomain(domain.id)}
-                  className={`cursor-pointer p-6 rounded-xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-lg ${
-                    selectedDomain === domain.id
-                      ? 'border-black bg-gray-50'
-                      : 'border-gray-200 bg-white hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-4 h-4 rounded-full ${
-                      selectedDomain === domain.id ? 'bg-black' : 'bg-gray-400'
-                    }`}></div>
-                    <h3 className="text-lg font-semibold">{domain.title}</h3>
+            {loading ? (
+              <div className="text-center">Loading domains...</div>
+            ) : error ? (
+              <div className="text-center text-red-600">{error}</div>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {domains.map((domain) => (
+                  <div
+                    key={domain.id}
+                    onClick={() => setSelectedDomain(domain.id)}
+                    className={`cursor-pointer p-6 rounded-xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-lg ${
+                      selectedDomain === domain.id
+                        ? 'border-black bg-gray-50'
+                        : 'border-gray-200 bg-white hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-4 h-4 rounded-full ${
+                        selectedDomain === domain.id ? 'bg-black' : 'bg-gray-400'
+                      }`}></div>
+                      <h3 className="text-lg font-semibold">{domain.title}</h3>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={handleProceed}
-              disabled={!selectedPosition || !selectedDomain}
+              disabled={!selectedPosition || !selectedDomain || loading}
               className={`px-8 py-4 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-all duration-200 ${
-                selectedPosition && selectedDomain
+                selectedPosition && selectedDomain && !loading
                   ? 'bg-black hover:bg-gray-800 text-white hover:scale-105'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
@@ -137,19 +171,7 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
               <span>{isAssessmentMode ? 'Start Interview' : 'Start Aptitude Test'}</span>
               <ArrowRight className="h-5 w-5" />
             </button>
-            {!isAssessmentMode && (
-              <button
-                onClick={() => onNavigate('interview')}
-                disabled={!selectedPosition || !selectedDomain}
-                className={`px-8 py-4 rounded-lg font-semibold border-2 transition-all duration-200 ${
-                  selectedPosition && selectedDomain
-                    ? 'border-black text-black hover:bg-gray-50'
-                    : 'border-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                Skip to Interview
-              </button>
-            )}
+            
           </div>
 
           {/* Selection Summary */}

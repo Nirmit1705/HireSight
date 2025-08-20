@@ -2,6 +2,7 @@ import { Router } from 'express';
 import authRoutes from './auth';
 import interviewRoutes from './interview';
 import aptitudeRoutes from './aptitude';
+import metadataRoutes from './metadata';
 
 const router = Router();
 
@@ -22,5 +23,8 @@ router.use('/interviews', interviewRoutes);
 
 // Aptitude routes
 router.use('/aptitude', aptitudeRoutes);
+
+// Metadata routes (positions, domains, etc.)
+router.use('/metadata', metadataRoutes);
 
 export default router;

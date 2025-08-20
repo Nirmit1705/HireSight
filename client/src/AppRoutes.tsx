@@ -35,6 +35,18 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
     <Routes>
       {routeConfig.map((route) => {
         const Component = route.component;
+        
+        // Special handling for landing page - redirect authenticated users to dashboard
+        if (route.pageKey === 'landing' && isAuthenticated && !isLoading) {
+          return (
+            <Route 
+              key={route.path} 
+              path={route.path} 
+              element={<Navigate to="/dashboard" replace />} 
+            />
+          );
+        }
+        
         const element = route.requiresAuth ? (
           <ProtectedRoute isAuthenticated={isAuthenticated} isLoading={isLoading}>
             <Component {...(route.props || {})} />

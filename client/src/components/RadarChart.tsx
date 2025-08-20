@@ -48,7 +48,7 @@ const RadarChart: React.FC<RadarChartProps> = ({
         cy={center}
         r={radius}
         fill="none"
-        stroke="#e5e7eb"
+        stroke="#595959"
         strokeWidth="1"
         opacity={0.3}
       />
@@ -93,14 +93,6 @@ const RadarChart: React.FC<RadarChartProps> = ({
           stroke="#ffffff"
           strokeWidth="2"
         />
-        <text
-          x={point.x}
-          y={point.y - 10}
-          textAnchor="middle"
-          className="text-xs font-semibold fill-black"
-        >
-          {item.value}%
-        </text>
       </g>
     );
   });

@@ -39,9 +39,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onLogin }) => {
             </div>
             
             {/* Main Headline */}
-            <div className="space-y-6 sm:space-y-8">
+            <div className="space-y-6 sm:space-y-">
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-tight">
-                Ace every interview.
+                Ace every interview
               </h1>
               <p className="text-lg sm:text-xl md:text-2xl text-gray-500 font-normal max-w-2xl mx-auto leading-relaxed px-4">
                 AI-powered prep platform for job seekers.

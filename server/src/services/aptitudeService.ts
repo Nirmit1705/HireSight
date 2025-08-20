@@ -234,22 +234,35 @@ export class AptitudeService {
 
   async completeTest(testId: string, timeTaken: number) {
     try {
+      // Get the test details to know the total number of questions
+      const test = await this.prisma.aptitudeTest.findUnique({
+        where: { id: testId }
+      });
+
+      if (!test) {
+        throw new Error('Test not found');
+      }
+
       // Get all answers for this test
       const answers = await this.prisma.aptitudeTestAnswer.findMany({
         where: { testId },
         include: { question: true }
       });
 
-      if (answers.length === 0) {
-        throw new Error('No answers found for this test');
-      }
-
-      // Calculate scores by category
+      // Calculate scores by category (still based on answered questions for category breakdown)
       const categoryScores = this.calculateCategoryScores(answers);
 
-      // Calculate overall score and round to 0 decimal places
+      // Calculate overall score based on total questions, not just answered questions
       const correctAnswers = answers.filter(answer => answer.isCorrect).length;
-      const overallScore = Math.round((correctAnswers / answers.length) * 100);
+      const overallScore = Math.round((correctAnswers / test.totalQuestions) * 100);
+
+      console.log(`[AptitudeService] Test completion debug:
+        - Test ID: ${testId}
+        - Total questions in test: ${test.totalQuestions}
+        - Questions answered: ${answers.length}
+        - Correct answers: ${correctAnswers}
+        - Calculated score: ${overallScore}% (${correctAnswers}/${test.totalQuestions})
+      `);
 
       // Update the test with completion data
       return await this.prisma.aptitudeTest.update({

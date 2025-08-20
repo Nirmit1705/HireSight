@@ -20,6 +20,7 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
   const [showExplanation, setShowExplanation] = useState<boolean[]>([]);
   const [testId, setTestId] = useState<string | null>(null);
   const [detailedAnswers, setDetailedAnswers] = useState<any[]>([]);
+  const [backendScore, setBackendScore] = useState<number | null>(null);
 
   // Load questions from API
   useEffect(() => {
@@ -122,6 +123,7 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
         const timeTakenSeconds = 1800 - timeLeft; // Calculate time taken in seconds
         const results = await aptitudeAPI.completeTest(testId, timeTakenSeconds);
         setTestScore(results.overallScore);
+        setBackendScore(results.overallScore); // Store the backend score
         
         // Fetch detailed results for feedback display
         const detailedResults = await aptitudeAPI.getTestResults(testId);
@@ -194,13 +196,19 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
       totalQuestions = questions.length;
       percentage = Math.round((score / totalQuestions) * 100);
     } else {
-      // For formal tests, use the data from backend
-      if (detailedAnswers.length > 0) {
+      // For formal tests, use the backend score if available
+      if (backendScore !== null) {
+        // Use the score calculated by the backend
+        percentage = backendScore;
         score = detailedAnswers.filter(answer => answer.isCorrect).length;
-        totalQuestions = detailedAnswers.length;
+        totalQuestions = questions.length; // Use the total questions, not just answered ones
+      } else if (detailedAnswers.length > 0) {
+        // Fallback: calculate from detailed answers but use total questions
+        score = detailedAnswers.filter(answer => answer.isCorrect).length;
+        totalQuestions = questions.length;
         percentage = Math.round((score / totalQuestions) * 100);
       } else {
-        // Fallback if detailed answers not available
+        // Final fallback if no data available
         score = selectedAnswers.filter(a => a !== undefined).length;
         totalQuestions = questions.length;
         percentage = Math.round((score / totalQuestions) * 100);

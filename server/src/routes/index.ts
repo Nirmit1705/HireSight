@@ -4,6 +4,7 @@ import interviewRoutes from './interview';
 import aptitudeRoutes from './aptitude';
 import metadataRoutes from './metadata';
 import aiInterviewRoutes from './aiInterview';
+import speechToTextRoutes from './speechToText';
 
 const router = Router();
 
@@ -30,5 +31,8 @@ router.use('/aptitude', aptitudeRoutes);
 
 // Metadata routes (positions, domains, etc.)
 router.use('/metadata', metadataRoutes);
+
+// Speech-to-text routes
+router.use('/speech-to-text', speechToTextRoutes);
 
 export default router;

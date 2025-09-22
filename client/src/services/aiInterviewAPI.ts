@@ -32,10 +32,18 @@ export interface AnswerResponse {
   nextQuestion?: AIQuestion;
   shouldContinue: boolean;
   isFollowUp: boolean;
+  humanResponse?: string; // New field for human-like responses
+  isComplete?: boolean;
   progress: {
     currentQuestion: number;
     totalQuestions: number;
     conversationLength: number;
+    questionsAnswered?: number;
+  };
+  conversationContext?: {
+    totalMessages: number;
+    averageResponseLength: number;
+    topicsCovered: string[];
   };
   message: string;
 }
@@ -148,6 +156,119 @@ class AIInterviewAPI {
     
     if (!response.ok || !data.success) {
       throw new Error('Health check failed');
+    }
+
+    return data.data;
+  }
+
+  // === NEW CONTEXTUAL INTERVIEW METHODS ===
+
+  async startContextualInterview(resumeAnalysis: ResumeAnalysis): Promise<AIInterviewSession> {
+    const response = await fetch(`${API_BASE_URL}/ai-interview/start-contextual-interview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ resumeAnalysis })
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to start contextual AI interview');
+    }
+
+    return data.data;
+  }
+
+  async submitContextualAnswer(sessionId: string, answer: string): Promise<AnswerResponse> {
+    const response = await fetch(`${API_BASE_URL}/ai-interview/submit-contextual-answer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ sessionId, answer })
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to submit contextual answer');
+    }
+
+    return data.data;
+  }
+
+  async completeContextualInterview(sessionId: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/ai-interview/complete-contextual-interview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ sessionId })
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to complete contextual interview');
+    }
+
+    return data.data;
+  }
+
+  async getContextualSessionStatus(sessionId: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/ai-interview/contextual-session/${sessionId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to get contextual session status');
+    }
+
+    return data.data;
+  }
+
+  async getConversationHistory(sessionId: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/ai-interview/conversation-history/${sessionId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to get conversation history');
+    }
+
+    return data.data;
+  }
+
+  async contextualHealthCheck(): Promise<{ 
+    contextualAI: boolean; 
+    conversationService: boolean; 
+    redis: boolean;
+    features: {
+      contextAware: boolean;
+      humanLikeResponses: boolean;
+      followUpQuestions: boolean;
+      topicRedirection: boolean;
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/ai-interview/contextual-health`, {
+      method: 'GET'
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error('Contextual AI health check failed');
     }
 
     return data.data;

@@ -50,7 +50,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticate
 
   return (
     <>
-      <nav className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-black rounded-full shadow-lg max-w-6xl w-[95%] sm:w-[85%] md:w-[80%] lg:w-[75%] xl:w-[70%]">
+      <nav className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-black rounded-xl shadow-lg max-w-7xl w-[95%] sm:w-[85%] md:w-[80%] lg:w-[75%] xl:w-[70%]">
         <div className="px-6 sm:px-8 py-3">
           <div className="flex items-center justify-between">
             {/* Logo */}

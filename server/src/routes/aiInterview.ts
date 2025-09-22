@@ -3,6 +3,7 @@ import multer from 'multer';
 import { authenticateToken } from '../middleware/authMiddleware';
 import { ResumeProcessingService } from '../services/resumeProcessingService';
 import { AIQuestionService } from '../services/aiQuestionService';
+import { ContextualInterviewController } from '../controllers/contextualInterviewController';
 import { AuthenticatedRequest } from '../types/authTypes';
 import fs from 'fs';
 import path from 'path';
@@ -11,6 +12,7 @@ import { promisify } from 'util';
 const router = express.Router();
 const resumeService = new ResumeProcessingService();
 const aiService = new AIQuestionService();
+const contextualController = new ContextualInterviewController();
 
 // Test endpoint for Ollama debugging
 router.post('/test-ollama', authenticateToken, async (req, res) => {
@@ -357,6 +359,50 @@ router.get('/health', async (req, res) => {
       message: 'Health check failed'
     });
   }
+});
+
+// === NEW CONTEXTUAL INTERVIEW ROUTES ===
+
+/**
+ * Start contextual AI interview session with conversation awareness
+ */
+router.post('/start-contextual-interview', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  await contextualController.startContextualInterview(req, res);
+});
+
+/**
+ * Submit answer and get contextual response with human-like interactions
+ */
+router.post('/submit-contextual-answer', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  await contextualController.submitContextualAnswer(req, res);
+});
+
+/**
+ * Complete contextual AI interview session
+ */
+router.post('/complete-contextual-interview', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  await contextualController.completeContextualInterview(req, res);
+});
+
+/**
+ * Get current contextual interview session status with conversation context
+ */
+router.get('/contextual-session/:sessionId', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  await contextualController.getContextualSessionStatus(req, res);
+});
+
+/**
+ * Get conversation history for a session (for debugging/review)
+ */
+router.get('/conversation-history/:sessionId', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  await contextualController.getConversationHistory(req, res);
+});
+
+/**
+ * Health check for contextual AI services
+ */
+router.get('/contextual-health', async (req, res) => {
+  await contextualController.healthCheck(req, res);
 });
 
 export default router;

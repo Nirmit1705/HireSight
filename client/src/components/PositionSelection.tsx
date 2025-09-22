@@ -130,9 +130,15 @@ const PositionSelection: React.FC<PositionSelectionProps> = ({
   const handleProceed = () => {
     if (selectionMode === 'manual' && selectedPosition && selectedDomain) {
       // Manual selection mode
+      if (setIsAiMode) {
+        setIsAiMode(false);
+      }
       onNavigate(isAssessmentMode ? 'interview' : 'aptitude');
     } else if (selectionMode === 'resume' && resumeAnalysis) {
-      // Resume-based mode - proceed directly to interview
+      // Resume-based mode - proceed directly to contextual AI interview
+      if (setIsAiMode) {
+        setIsAiMode(true); // Always use AI mode with contextual features for resume-based interviews
+      }
       onNavigate('interview');
     }
   };

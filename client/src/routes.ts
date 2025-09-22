@@ -54,7 +54,9 @@ export const createRouteConfig = (
       selectedPosition: appState.selectedPosition,
       setSelectedPosition: appState.setSelectedPosition,
       selectedDomain: appState.selectedDomain,
-      setSelectedDomain: appState.setSelectedDomain
+      setSelectedDomain: appState.setSelectedDomain,
+      setResumeAnalysis: appState.setResumeAnalysis,
+      setIsAiMode: appState.setIsAiMode
     }
   },
   {
@@ -103,6 +105,8 @@ export const createRouteConfig = (
       setSelectedPosition: appState.setSelectedPosition,
       selectedDomain: appState.selectedDomain,
       setSelectedDomain: appState.setSelectedDomain,
+      setResumeAnalysis: appState.setResumeAnalysis,
+      setIsAiMode: appState.setIsAiMode,
       isAssessmentMode: true
     }
   },
@@ -111,7 +115,12 @@ export const createRouteConfig = (
     pageKey: 'interview',
     component: LiveInterview,
     requiresAuth: true,
-    props: { onNavigate: handleNavigate, setInterviewScore: appState.setInterviewScore }
+    props: { 
+      onNavigate: handleNavigate, 
+      setInterviewScore: appState.setInterviewScore,
+      isAiMode: appState.isAiMode,
+      resumeAnalysis: appState.resumeAnalysis
+    }
   },
   {
     path: '/feedback',

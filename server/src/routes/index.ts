@@ -3,6 +3,7 @@ import authRoutes from './auth';
 import interviewRoutes from './interview';
 import aptitudeRoutes from './aptitude';
 import metadataRoutes from './metadata';
+import aiInterviewRoutes from './aiInterview';
 
 const router = Router();
 
@@ -20,6 +21,9 @@ router.use('/auth', authRoutes);
 
 // Interview routes
 router.use('/interviews', interviewRoutes);
+
+// AI Interview routes
+router.use('/ai-interview', aiInterviewRoutes);
 
 // Aptitude routes
 router.use('/aptitude', aptitudeRoutes);

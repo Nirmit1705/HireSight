@@ -66,7 +66,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pt-20 pb-12 bg-gray-50">
+    <div className="min-h-screen pt-20 pb-12">
       <div className="container mx-auto px-6 pt-6">
         <div className="max-w-7xl mx-auto">
           {/* Header */}

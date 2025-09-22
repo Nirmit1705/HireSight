@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, Home, User, LogIn, LogOut, BarChart3, BookOpen, Target, Menu, X } from 'lucide-react';
+import { Home, User, LogIn, LogOut, BarChart3, BookOpen, Target, Menu, X } from 'lucide-react';
 import { PageType } from '../App';
 import AuthModal from './AuthModal';
 
@@ -50,8 +50,8 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticate
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-black">
-        <div className="container mx-auto px-4 sm:px-6 py-4">
+      <nav className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-black rounded-full shadow-lg max-w-6xl w-[95%] sm:w-[85%] md:w-[80%] lg:w-[75%] xl:w-[70%]">
+        <div className="px-6 sm:px-8 py-3">
           <div className="flex items-center justify-between">
             {/* Logo */}
             <div 
@@ -126,8 +126,8 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticate
 
           {/* Mobile Menu */}
           {isMobileMenuOpen && (
-            <div className="md:hidden mt-4 pb-4 border-t border-gray-700">
-              <div className="flex flex-col space-y-2 pt-4">
+            <div className="md:hidden absolute top-full left-0 right-0 mt-2 bg-black rounded-2xl border-t border-gray-700 shadow-xl">
+              <div className="flex flex-col space-y-2 p-4">
                 {/* Mobile Navigation Links */}
                 {isAuthenticated && (
                   <>

@@ -165,7 +165,7 @@ const AptitudeTest: React.FC<AptitudeTestProps> = ({ onNavigate, setTestScore, i
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen pt-20 pb-12 flex items-center justify-center">
+      <div className="min-h-screen pt-1 pb-12 flex items-center justify-center">
         <div className="text-center max-w-md">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-4">Error Loading Questions</h2>

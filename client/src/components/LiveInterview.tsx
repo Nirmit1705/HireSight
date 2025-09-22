@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mic, MicOff, ArrowRight } from 'lucide-react';
 import { PageType } from '../App';
 import { aiInterviewAPI, ResumeAnalysis, AIQuestion } from '../services/aiInterviewAPI';
+import { useSpeechToText } from '../hooks/useSpeechToText';
 
 interface LiveInterviewProps {
   onNavigate: (page: PageType) => void;
@@ -33,6 +34,65 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
   // AI interview states
   const [aiQuestions, setAiQuestions] = useState<AIQuestion[]>([]);
   const [aiSessionId, setAiSessionId] = useState<string | null>(null);
+
+  // Transcript display management
+  const [displayedTranscript, setDisplayedTranscript] = useState('');
+  const [transcriptSubmitted, setTranscriptSubmitted] = useState(false);
+
+  // Speech-to-text functionality
+  const {
+    isRecording: isSpeechRecording,
+    isProcessing: isSpeechProcessing,
+    transcript,
+    error: speechError,
+    confidence,
+    startRecording: startSpeechRecording,
+    stopRecording: stopSpeechRecording,
+    clearTranscript,
+  } = useSpeechToText();
+
+  // Handle transcript display management
+  useEffect(() => {
+    if (transcript && !transcriptSubmitted) {
+      setDisplayedTranscript(transcript);
+    }
+  }, [transcript, transcriptSubmitted]);
+
+  // Reset transcript states when question changes (successful submission)
+  useEffect(() => {
+    setDisplayedTranscript('');
+    setTranscriptSubmitted(false);
+    clearTranscript();
+  }, [currentQuestion]);
+
+  // Handle completed transcription
+  useEffect(() => {
+    if (transcript && !isSpeechRecording && !isSpeechProcessing && !isProcessingResponse && !transcriptSubmitted) {
+      // Add transcribed response to responses array
+      const newResponses = [...responses];
+      
+      // Check if this response has already been processed
+      if (newResponses[currentQuestion] === transcript) {
+        return; // Avoid duplicate processing
+      }
+      
+      newResponses[currentQuestion] = transcript;
+      setResponses(newResponses);
+      setTranscriptSubmitted(true); // Mark as submitted to prevent re-processing
+      
+      if (isAiMode && aiSessionId) {
+        // Submit to AI service
+        submitAiAnswer(transcript);
+      } else {
+        // Standard mode - proceed to next question
+        if (currentQuestion < getTotalQuestions() - 1) {
+          generateMockResponse();
+        } else {
+          handleComplete();
+        }
+      }
+    }
+  }, [transcript, isSpeechRecording, isSpeechProcessing, isProcessingResponse, transcriptSubmitted, currentQuestion, responses, isAiMode, aiSessionId]);
 
   const questions = [
     "Tell me about yourself and your background.",
@@ -204,18 +264,42 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
 
     try {
       setIsProcessingResponse(true);
+      // Don't clear transcript immediately - let user see what was submitted
+      
+      console.log('Submitting answer to AI service:', { sessionId: aiSessionId, answer });
+      
       const result = await aiInterviewAPI.submitAnswer(aiSessionId, answer);
+      
+      console.log('AI service response:', result);
       
       if (result.nextQuestion) {
         setAiQuestions(prev => [...prev, result.nextQuestion!]);
         setCurrentQuestion(prev => prev + 1);
+        // Transcript states will be reset by the currentQuestion change effect
       } else if (!result.shouldContinue) {
         // Interview completed
         handleComplete();
       }
     } catch (error) {
       console.error('Answer submission error:', error);
-      alert(`Failed to submit answer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // More specific error handling
+      let errorMessage = 'Failed to submit answer';
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Connection error. Please check if the server is running and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      alert(`${errorMessage}\n\nYour response was: "${answer}"\n\nYou can try speaking again.`);
+      
+      // Reset transcript submission state to allow retry
+      setTranscriptSubmitted(false);
+      
+      // Don't advance to next question on error
+      // User can try again by clicking the mic button
     } finally {
       setIsProcessingResponse(false);
     }
@@ -244,30 +328,19 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
   };
 
   const handleMicClick = async () => {
-    if (isRecording) {
-      // Stop recording
-      setIsRecording(false);
-      
-      // Add mock response to responses array
-      const newResponses = [...responses];
-      const mockResponse = 'Voice response recorded (mock data)';
-      newResponses[currentQuestion] = mockResponse;
-      setResponses(newResponses);
-      
-      if (isAiMode && aiSessionId) {
-        // Submit to AI service
-        await submitAiAnswer(mockResponse);
-      } else {
-        // Standard mode
-        if (currentQuestion < getTotalQuestions() - 1) {
-          await generateMockResponse();
-        } else {
-          handleComplete();
-        }
-      }
+    if (isSpeechRecording) {
+      // Stop recording and process
+      await stopSpeechRecording();
     } else {
-      // Start recording
-      setIsRecording(true);
+      // Start recording - reset transcript states for new recording
+      clearTranscript();
+      setDisplayedTranscript('');
+      setTranscriptSubmitted(false);
+      
+      const success = await startSpeechRecording();
+      if (!success) {
+        alert('Failed to start recording. Please check your microphone permissions.');
+      }
     }
   };
 
@@ -307,8 +380,12 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
   };
 
   const getStatusText = () => {
-    if (isProcessingResponse) return "Processing your response...";
-    if (isRecording) return "Recording... Click to stop";
+    if (isSpeechProcessing) return "Processing your speech...";
+    if (isSpeechRecording) return "Recording... Click to stop";
+    if (speechError) return `Error: ${speechError}`;
+    if (isProcessingResponse && displayedTranscript) return `Submitting: "${displayedTranscript}"`;
+    if (displayedTranscript && !transcriptSubmitted) return `Ready to submit: "${displayedTranscript}"`;
+    if (displayedTranscript && transcriptSubmitted) return `Submitted: "${displayedTranscript}"`;
     return "Click to Start Answering";
   };
 
@@ -415,7 +492,7 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
 
   // Main Interview Interface
   return (
-    <div className="h-screen flex flex-col pt-16">
+    <div className="h-screen flex flex-col">
       <div className="flex-1 flex flex-col md:flex-row">
         {/* Left Panel - Video Background (AI Interviewer) */}
         <div className="w-full md:w-1/2 h-1/2 md:h-full bg-black flex flex-col justify-between p-3 md:p-12 relative overflow-hidden">
@@ -604,8 +681,8 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
                         className="bg-white md:bg-black transition-all duration-100"
                         style={{
                           width: window.innerWidth < 768 ? '2px' : '3px',
-                          height: `${isRecording ? (window.innerWidth < 768 ? Math.random() * 20 + 5 : Math.random() * 40 + 10) : 2}px`,
-                          opacity: isRecording ? 0.4 + Math.random() * 0.6 : 0.4,
+                          height: `${(isSpeechRecording || isSpeechProcessing) ? (window.innerWidth < 768 ? Math.random() * 20 + 5 : Math.random() * 40 + 10) : 2}px`,
+                          opacity: (isSpeechRecording || isSpeechProcessing) ? 0.4 + Math.random() * 0.6 : 0.4,
                           borderRadius: '1px'
                         }}
                       />
@@ -618,12 +695,50 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
                   {getStatusText()}
                 </p>
                 
+                {/* Transcript Display */}
+                {(displayedTranscript || speechError) && (
+                  <div className="mb-4 md:mb-6 max-w-lg mx-auto">
+                    <div className={`p-3 md:p-4 rounded-lg border-2 transition-all duration-300 ${
+                      speechError 
+                        ? 'bg-red-50 border-red-200 text-red-800' 
+                        : transcriptSubmitted
+                        ? 'bg-green-50 border-green-200 text-green-800'
+                        : 'bg-blue-50 border-blue-200 text-blue-800'
+                    }`}>
+                      {speechError ? (
+                        <div>
+                          <p className="font-semibold text-sm">Speech Recognition Error:</p>
+                          <p className="text-sm">{speechError}</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="font-semibold text-sm mb-2">
+                            {transcriptSubmitted ? 'Response Submitted:' : 'Your Response:'}
+                          </p>
+                          <p className="text-sm md:text-base italic">"{displayedTranscript}"</p>
+                          {confidence > 0 && (
+                            <p className="text-xs mt-2 opacity-75">
+                              Confidence: {Math.round(confidence * 100)}%
+                            </p>
+                          )}
+                          {transcriptSubmitted && (
+                            <div className="flex items-center mt-2">
+                              <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                              <p className="text-xs">Processing...</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 {/* Control Buttons Container */}
                 <div className="flex justify-center items-center space-x-3 md:space-x-4">
                   {/* Microphone Button */}
                   <div className="relative">
                     {/* Animated Ring for Active State */}
-                    {isRecording && (
+                    {(isSpeechRecording || isSpeechProcessing) && (
                       <>
                         <div className="absolute inset-0 rounded-full border-2 md:border-4 border-white md:border-black animate-ping opacity-75"></div>
                         <div className="absolute inset-0 rounded-full border-2 md:border-2 border-white md:border-black animate-pulse"></div>
@@ -632,14 +747,18 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
                     
                     <button
                       onClick={handleMicClick}
-                      disabled={isProcessingResponse}
+                      disabled={isSpeechProcessing}
                       className={`relative w-14 h-14 md:w-40 md:h-40 rounded-full border-2 md:border-4 transition-all duration-300 flex items-center justify-center ${
-                        isRecording 
+                        isSpeechRecording 
                           ? 'bg-red-500 md:bg-black border-red-500 md:border-black text-white scale-110' 
+                          : isSpeechProcessing
+                          ? 'bg-yellow-500 md:bg-gray-700 border-yellow-500 md:border-gray-700 text-white'
                           : 'bg-white border-white md:border-black text-black hover:scale-105 shadow-lg'
-                      } ${isProcessingResponse ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                      } ${isSpeechProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
-                      {isRecording ? (
+                      {isSpeechProcessing ? (
+                        <div className="animate-spin rounded-full h-5 w-5 md:h-16 md:w-16 border-b-2 border-current"></div>
+                      ) : isSpeechRecording ? (
                         <MicOff className="h-5 w-5 md:h-16 md:w-16" />
                       ) : (
                         <Mic className="h-5 w-5 md:h-16 md:w-16" />
@@ -651,7 +770,7 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
                   {(
                     (isAiMode && currentQuestion >= 5) || // AI mode: after 5 questions
                     (!isAiMode && currentQuestion >= 4)   // Standard mode: after 4 questions
-                  ) && !isProcessingResponse && (
+                  ) && !isSpeechProcessing && (
                     <button
                       onClick={handleComplete}
                       className="bg-gray-800 text-white px-3 md:px-6 py-2 md:py-3 rounded-lg hover:bg-black transition-colors font-semibold text-xs md:text-base"

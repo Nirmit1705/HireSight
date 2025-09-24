@@ -257,7 +257,9 @@ export class ContextualAIQuestionService {
 
       console.log(`Generating contextual question ${questionNumber + 1}/${totalQuestions}...`);
       
-      const response = await this.queryOllamaWithTimeout(prompt, 15000);
+      // Use longer timeout for first question as Ollama might need to load model
+      const timeout = questionNumber === 0 ? 45000 : 25000;
+      const response = await this.queryOllamaWithTimeout(prompt, timeout);
       const questions = this.parseQuestions(response);
       
       if (questions.length > 0) {
@@ -329,7 +331,7 @@ Generate a JSON response with exactly this format:
 
 Make the human response feel natural and conversational. Make the follow-up question feel like a natural continuation of the conversation.`;
 
-      const response = await this.queryOllamaWithTimeout(prompt, 12000);
+      const response = await this.queryOllamaWithTimeout(prompt, 20000);
       const parsed = this.parseFollowUpResponse(response);
       
       return {
@@ -502,16 +504,26 @@ Make it sound like a real human conversation, not a formal assessment.`;
   // Include other necessary methods from the original service
   async healthCheck(): Promise<boolean> {
     try {
+      console.log('Performing Ollama health check...');
+      // First check if Ollama is running
       const response = await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 5000 });
-      return response.status === 200;
+      if (response.status !== 200) {
+        return false;
+      }
+      
+      // Then test if the model can generate a response
+      const testResponse = await this.testOllamaConnection("Generate a simple JSON: {\"status\": \"ready\"}");
+      console.log('Ollama model test successful, response length:', testResponse.length);
+      return testResponse.length > 0;
     } catch (error) {
-      console.error('Ollama health check failed:', error);
+      console.error('Ollama health check failed:', error instanceof Error ? error.message : error);
       return false;
     }
   }
 
-  private async queryOllamaWithTimeout(prompt: string, timeout: number = 15000): Promise<string> {
+  private async queryOllamaWithTimeout(prompt: string, timeout: number = 25000): Promise<string> {
     try {
+      console.log(`Querying Ollama with timeout: ${timeout}ms`);
       const response = await axios.post(
         `${this.ollamaUrl}/api/generate`,
         {
@@ -521,7 +533,9 @@ Make it sound like a real human conversation, not a formal assessment.`;
           options: {
             temperature: 0.7,
             top_p: 0.9,
-            top_k: 40
+            top_k: 40,
+            num_predict: 200, // Limit response length for faster generation
+            num_ctx: 2048     // Reduce context window for faster processing
           }
         },
         { timeout }
@@ -592,7 +606,7 @@ Make it sound like a real human conversation, not a formal assessment.`;
     this.conversationService.endConversation(sessionId);
   }
 
-  async testOllamaConnection(prompt: string): Promise<string> {
-    return await this.queryOllamaWithTimeout(prompt, 10000);
+  async testOllamaConnection(prompt: string = "Say hello."): Promise<string> {
+    return await this.queryOllamaWithTimeout(prompt, 15000);
   }
 }

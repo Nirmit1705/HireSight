@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, ArrowRight } from 'lucide-react';
+import { Mic, MicOff, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { PageType } from '../App';
 import { aiInterviewAPI, ResumeAnalysis, AIQuestion } from '../services/aiInterviewAPI';
 import { useSpeechToText } from '../hooks/useSpeechToText';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
 
 interface LiveInterviewProps {
   onNavigate: (page: PageType) => void;
@@ -51,10 +52,6 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
     displayedContent?: string;
   }>>([]);
 
-  // Typing animation states
-  const [typingSpeed] = useState(30); // milliseconds per character
-  const [currentlyTypingIndex, setCurrentlyTypingIndex] = useState<number | null>(null);
-  
   // Chat scroll ref for auto-scrolling
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +69,32 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
     stopRecording: stopSpeechRecording,
     clearTranscript,
   } = useSpeechToText();
+
+  // Text-to-speech functionality
+  const {
+    isLoading: isTTSLoading,
+    isPlaying: isTTSPlaying,
+    error: ttsError,
+    speak,
+    stop: stopTTS,
+  } = useTextToSpeech({ autoplay: true });
+
+  // TTS settings
+  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
+  
+  // Ref to track TTS state to prevent multiple calls
+  const ttsStateRef = useRef<{ messageIndex: number; hasSpoken: boolean }>({ messageIndex: -1, hasSpoken: false });
+
+  // Interview questions array
+  const questions = [
+    "Tell me about yourself and your background.",
+    "What interests you most about this position?", 
+    "Describe a challenging project you've worked on.",
+    "How do you handle working under pressure?",
+    "What are your greatest strengths and weaknesses?",
+    "Where do you see yourself in 5 years?",
+    "Do you have any questions for us?",
+  ];
 
   // Handle transcript display management
   useEffect(() => {
@@ -129,67 +152,58 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
   }, [transcript, isSpeechRecording, isSpeechProcessing, isProcessingResponse, transcriptSubmitted, currentQuestion, responses, isAiMode, aiSessionId]);
 
   // Add questions and responses to chat history
-  const addToChatHistory = (type: 'question' | 'answer', content: string, isFollowUp = false, withTyping = false) => {
+  const addToChatHistory = (type: 'question' | 'answer', content: string, isFollowUp = false, enableTTS = true) => {
     const newMessage = {
       type,
       content,
       timestamp: new Date(),
       isFollowUp,
-      isTyping: withTyping && type === 'question',
-      displayedContent: withTyping && type === 'question' ? '' : content
+      isTyping: false, // DISABLE TYPING ANIMATION COMPLETELY
+      displayedContent: content // SHOW FULL CONTENT IMMEDIATELY
     };
 
     setChatHistory(prev => {
       const newHistory = [...prev, newMessage];
       
-      // If this is a typing question, start the typing animation
-      if (withTyping && type === 'question') {
-        setCurrentlyTypingIndex(newHistory.length - 1);
+      // START TTS IMMEDIATELY when grey chat bubble appears - NO TYPING DELAYS
+      if (type === 'question' && isTTSEnabled && enableTTS) {
+        const messageIndex = newHistory.length - 1;
+        
+        // Only start TTS if not already spoken for this message
+        if (ttsStateRef.current.messageIndex !== messageIndex || !ttsStateRef.current.hasSpoken) {
+          // Mark this message as having TTS started
+          ttsStateRef.current = { messageIndex, hasSpoken: true };
+          
+          console.log('🎙️ TTS STARTING - Grey chat bubble appeared for message:', messageIndex);
+          console.log('🚀 Content to speak:', content.substring(0, 100) + '...');
+          console.log('🔧 isAiMode:', isAiMode, 'enableTTS:', enableTTS);
+          
+          // DETAILED TIMING ANALYSIS - Track exactly where delay occurs
+          const startTime = performance.now();
+          console.log('⏱️ [TIMING] TTS Call Started at:', new Date().toISOString());
+          console.log('⏱️ [TIMING] Performance Start Time:', startTime);
+          
+          speak(content)
+            .then(() => {
+              const endTime = performance.now();
+              const totalTime = endTime - startTime;
+              console.log('✅ TTS completed for message:', messageIndex);
+              console.log('⏱️ [TIMING] TTS Call Completed at:', new Date().toISOString());
+              console.log('⏱️ [TIMING] Total TTS Time:', totalTime, 'ms');
+              console.log('⏱️ [TIMING] Time to First Audio (approximate):', totalTime, 'ms');
+            })
+            .catch((error) => {
+              const endTime = performance.now();
+              const totalTime = endTime - startTime;
+              console.error('❌ TTS error for message:', messageIndex, error);
+              console.log('⏱️ [TIMING] TTS Error after:', totalTime, 'ms');
+            });
+        }
       }
       
       return newHistory;
     });
   };
-
-  // Typing animation effect
-  useEffect(() => {
-    if (currentlyTypingIndex === null) return;
-
-    const messageIndex = currentlyTypingIndex;
-    const message = chatHistory[messageIndex];
-    
-    if (!message || !message.isTyping) return;
-
-    const fullContent = message.content;
-    const currentLength = message.displayedContent?.length || 0;
-
-    if (currentLength < fullContent.length) {
-      const timer = setTimeout(() => {
-        setChatHistory(prev => {
-          const newHistory = [...prev];
-          const targetMessage = newHistory[messageIndex];
-          if (targetMessage && targetMessage.isTyping) {
-            targetMessage.displayedContent = fullContent.substring(0, currentLength + 1);
-          }
-          return newHistory;
-        });
-      }, typingSpeed);
-
-      return () => clearTimeout(timer);
-    } else {
-      // Typing complete
-      setChatHistory(prev => {
-        const newHistory = [...prev];
-        const targetMessage = newHistory[messageIndex];
-        if (targetMessage) {
-          targetMessage.isTyping = false;
-          targetMessage.displayedContent = fullContent;
-        }
-        return newHistory;
-      });
-      setCurrentlyTypingIndex(null);
-    }
-  }, [currentlyTypingIndex, chatHistory, typingSpeed]);
 
   // Auto-scroll to bottom when chat history changes
   useEffect(() => {
@@ -201,32 +215,86 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
   // Update chat history when questions change
   useEffect(() => {
     if (isAiMode && aiQuestions[currentQuestion] && interviewStarted) {
-      // Concatenate human response with the question if it exists
+      // Reset TTS state for new question
+      ttsStateRef.current = { messageIndex: -1, hasSpoken: false };
+      
+      // Don't immediately add humanResponse to chat - let the separate effect handle it
       const questionText = aiQuestions[currentQuestion].text;
-      const fullQuestionText = humanResponse 
-        ? `"${humanResponse}"\n\n${questionText}`
-        : questionText;
       
-      addToChatHistory('question', fullQuestionText, isFollowUp, true); // Enable typing animation
+      // For FIRST question, enable TTS immediately (no previous feedback to wait for)
+      // For subsequent questions, wait for feedback
+      const shouldEnableTTS = currentQuestion === 0;
       
-      // Clear human response after using it
-      if (humanResponse) {
-        setHumanResponse('');
+      addToChatHistory('question', questionText, isFollowUp, shouldEnableTTS);
+      
+      if (shouldEnableTTS) {
+        console.log('Added FIRST AI question to chat WITH TTS enabled:', currentQuestion + 1);
+      } else {
+        console.log('Added AI question to chat WITHOUT TTS (waiting for feedback):', currentQuestion + 1);
       }
+      
     } else if (!isAiMode && interviewStarted) {
-      addToChatHistory('question', getCurrentQuestion(), false, true); // Enable typing animation
+      // Reset TTS state for new question
+      ttsStateRef.current = { messageIndex: -1, hasSpoken: false };
+      
+      addToChatHistory('question', getCurrentQuestion(), false, true); // Enable TTS for non-AI mode
+      
+      console.log('Added non-AI question to chat WITH TTS enabled');
     }
-  }, [currentQuestion, aiQuestions, interviewStarted, isFollowUp, isAiMode, humanResponse]);
+  }, [currentQuestion, aiQuestions, interviewStarted, isFollowUp, isAiMode, isTTSEnabled, speak]);
 
-  const questions = [
-    "Tell me about yourself and your background.",
-    "What interests you most about this position?", 
-    "Describe a challenging project you've worked on.",
-    "How do you handle working under pressure?",
-    "What are your greatest strengths and weaknesses?",
-    "Where do you see yourself in 5 years?",
-    "Do you have any questions for us?",
-  ];
+  // Handle humanResponse updates separately to avoid multiple chat history updates
+  useEffect(() => {
+    if (humanResponse && isAiMode && aiQuestions[currentQuestion] && interviewStarted) {
+      // Reset TTS state since we're updating the message content
+      ttsStateRef.current = { messageIndex: -1, hasSpoken: false };
+      
+      // Update the latest message in chat history to include humanResponse
+      setChatHistory(prev => {
+        const newHistory = [...prev];
+        const lastQuestionIndex = newHistory.length - 1;
+        
+        if (lastQuestionIndex >= 0 && newHistory[lastQuestionIndex].type === 'question') {
+          const questionText = aiQuestions[currentQuestion].text;
+          const fullQuestionText = `"${humanResponse}"\n\n${questionText}`;
+          
+          // Update the message content - NO TYPING ANIMATION
+          newHistory[lastQuestionIndex] = {
+            ...newHistory[lastQuestionIndex],
+            content: fullQuestionText,
+            displayedContent: fullQuestionText, // Show full content immediately
+            isTyping: false // No typing animation
+          };
+          
+          // No typing animation needed
+        }
+        
+        return newHistory;
+      });
+      
+      // Clear human response after using it - but store it for TTS first
+      const feedbackText = humanResponse;
+      setHumanResponse('');
+      
+      // NOW TRIGGER TTS for the complete question with feedback
+      if (isTTSEnabled && feedbackText) {
+        const fullQuestionText = `"${feedbackText}"\n\n${aiQuestions[currentQuestion].text}`;
+        
+        console.log('🎙️ TTS STARTING FOR COMPLETE QUESTION WITH FEEDBACK');
+        console.log('🎵 Speaking complete content with feedback');
+        
+        speak(fullQuestionText)
+          .then(() => {
+            console.log('✅ TTS completed for question with feedback');
+          })
+          .catch((error) => {
+            console.error('❌ TTS error for question with feedback:', error);
+          });
+      }
+      
+      console.log('✅ Updated chat with feedback and started TTS');
+    }
+  }, [humanResponse, isAiMode, aiQuestions, currentQuestion, interviewStarted, isTTSEnabled, speak]);
 
   // Get current question text - prioritize AI questions when available
   const getCurrentQuestion = () => {
@@ -258,13 +326,13 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
   };
 
   const interviewTips = [
-    "✨ Preparing your personalized interview experience...",
-    "🎯 Analyzing industry-specific questions for your domain...",
-    "💡 Tip: Maintain good eye contact and speak clearly",
-    "📝 Tip: Use the STAR method for behavioral questions",
-    "🚀 Tip: Prepare specific examples from your experience",
-    "⭐ Your AI interviewer is getting ready...",
-    "🎉 Almost ready! Setting up your interview environment..."
+    "Preparing your personalized interview experience...",
+    "Analyzing industry-specific questions for your domain...",
+    "Tip: Maintain good eye contact and speak clearly",
+    "Tip: Use the STAR method for behavioral questions",
+    "Tip: Prepare specific examples from your experience",
+    "Your AI interviewer is getting ready...",
+    "Almost ready! Setting up your interview environment..."
   ];
 
   // Loading screen with tips
@@ -400,6 +468,7 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
       if (result.nextQuestion) {
         setAiQuestions(prev => [...prev, result.nextQuestion!]);
         setCurrentQuestion(prev => prev + 1);
+        
       } else if (result.isComplete || !result.shouldContinue) {
         // Interview completed
         handleComplete();
@@ -738,13 +807,53 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
                   {isAiMode ? 'AI-powered contextual interview' : 'Standard interview questions'}
                 </p>
               </div>
-              {conversationContext && (
-                <div className="text-xs text-gray-500">
-                  <div>Messages: {conversationContext.totalMessages}</div>
-                  <div>Topics: {conversationContext.topicsCovered.slice(-2).join(', ')}</div>
-                </div>
-              )}
+              <div className="flex items-center space-x-4">
+                {/* TTS Toggle */}
+                <button
+                  onClick={() => {
+                    if (isTTSPlaying) {
+                      stopTTS();
+                    }
+                    setIsTTSEnabled(!isTTSEnabled);
+                  }}
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isTTSEnabled 
+                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                  title={isTTSEnabled ? 'Disable text-to-speech' : 'Enable text-to-speech'}
+                >
+                  {isTTSEnabled ? (
+                    <>
+                      <Volume2 className="h-4 w-4" />
+                      <span>Audio On</span>
+                    </>
+                  ) : (
+                    <>
+                      <VolumeX className="h-4 w-4" />
+                      <span>Audio Off</span>
+                    </>
+                  )}
+                  {isTTSLoading && (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b border-current ml-1"></div>
+                  )}
+                </button>
+                
+                {conversationContext && (
+                  <div className="text-xs text-gray-500">
+                    <div>Messages: {conversationContext.totalMessages}</div>
+                    <div>Topics: {conversationContext.topicsCovered.slice(-2).join(', ')}</div>
+                  </div>
+                )}
+              </div>
             </div>
+            
+            {/* TTS Error Display */}
+            {ttsError && (
+              <div className="mt-2 p-2 bg-orange-100 border border-orange-300 rounded text-orange-700 text-xs">
+                <strong>Audio Error:</strong> {ttsError}
+              </div>
+            )}
           </div>
 
           {/* Chat Messages */}
@@ -786,7 +895,8 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
                       {message.type === 'question' ? (
                         <div>
                           {(() => {
-                            const contentToShow = message.isTyping ? (message.displayedContent || '') : message.content;
+                            // Always show full content since typing animation is disabled
+                            const contentToShow = message.content;
                             
                             if (contentToShow.startsWith('"')) {
                               // If the content starts with a quote, it contains feedback

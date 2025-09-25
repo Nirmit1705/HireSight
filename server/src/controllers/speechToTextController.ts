@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { createClient } from '@deepgram/sdk';
 import multer from 'multer';
+import { SpeechAnalysisService, WordTimestamp } from '../services/speechAnalysisService';
 
 // Configure multer for audio file upload
 const storage = multer.memoryStorage();
@@ -21,6 +22,9 @@ export const upload = multer({
 
 // Initialize Deepgram client
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY || '');
+
+// Initialize Speech Analysis Service
+const speechAnalysis = new SpeechAnalysisService();
 
 export const transcribeAudio = async (req: Request, res: Response) => {
   try {
@@ -59,10 +63,12 @@ export const transcribeAudio = async (req: Request, res: Response) => {
         numerals: false, // Keep numbers as words (e.g., "two" instead of "2")
         replace: [], // Don't replace any words
         search: [], // Include all words in search
+        words: true, // Enable word-level timestamps for confidence analysis
       }
     );
 
     const transcript = response.result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+    const words = response.result?.results?.channels?.[0]?.alternatives?.[0]?.words;
     
     if (!transcript) {
       return res.status(400).json({ 
@@ -71,14 +77,41 @@ export const transcribeAudio = async (req: Request, res: Response) => {
       });
     }
 
-    // Return the transcription
+    // Analyze confidence metrics using word-level timestamps
+    let confidenceMetrics = null;
+    if (words && words.length > 0) {
+      console.log('🔍 Starting confidence analysis for', words.length, 'words');
+      
+      // Convert Deepgram words format to our WordTimestamp interface
+      const wordTimestamps: WordTimestamp[] = words.map(word => ({
+        word: word.word,
+        start: word.start,
+        end: word.end,
+        confidence: word.confidence || 0,
+        punctuated_word: word.punctuated_word
+      }));
+
+      confidenceMetrics = speechAnalysis.analyzeConfidence(wordTimestamps);
+      
+      console.log('✅ Confidence analysis completed:');
+      console.log('  - Overall Score:', confidenceMetrics.overallScore + '%');
+      console.log('  - Filler Words:', confidenceMetrics.breakdown.fillerWords.length);
+      console.log('  - Pauses:', confidenceMetrics.breakdown.pauses.length);
+      console.log('  - Speech Rate:', Math.round(confidenceMetrics.breakdown.speechRate), 'WPM');
+    } else {
+      console.log('⚠️ No word-level timestamps available for confidence analysis');
+    }
+
+    // Return the transcription with confidence analysis
     res.json({
       success: true,
       transcript: transcript.trim(),
       confidence: response.result?.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0,
+      confidenceMetrics, // New detailed confidence analysis
       metadata: {
         duration: response.result?.metadata?.duration,
-        model: 'nova-2'
+        model: 'nova-2',
+        wordCount: words?.length || 0
       }
     });
 

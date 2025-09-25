@@ -4,6 +4,8 @@ import { PageType } from '../App';
 import { aiInterviewAPI, ResumeAnalysis, AIQuestion } from '../services/aiInterviewAPI';
 import { useSpeechToText } from '../hooks/useSpeechToText';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
+import { ConfidenceMetrics } from '../services/speechToTextAPI';
+import ConfidenceDisplay from './ConfidenceDisplay';
 
 interface LiveInterviewProps {
   onNavigate: (page: PageType) => void;
@@ -59,12 +61,17 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
   const [displayedTranscript, setDisplayedTranscript] = useState('');
   const [transcriptSubmitted, setTranscriptSubmitted] = useState(false);
 
+  // Confidence metrics tracking
+  const [currentConfidenceMetrics, setCurrentConfidenceMetrics] = useState<ConfidenceMetrics | null>(null);
+  const [showConfidenceAnalysis, setShowConfidenceAnalysis] = useState(false);
+
   // Speech-to-text functionality
   const {
     isRecording: isSpeechRecording,
     isProcessing: isSpeechProcessing,
     transcript,
     error: speechError,
+    confidenceMetrics,
     startRecording: startSpeechRecording,
     stopRecording: stopSpeechRecording,
     clearTranscript,
@@ -103,16 +110,90 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
     }
   }, [transcript, transcriptSubmitted]);
 
+  // Track confidence metrics when they're updated
+  useEffect(() => {
+    if (confidenceMetrics) {
+      setCurrentConfidenceMetrics(confidenceMetrics);
+      setShowConfidenceAnalysis(true);
+      
+      // Detailed console logging for confidence analysis
+      console.log('=== CONFIDENCE ANALYSIS FOR ANSWER ===');
+      console.log('Question:', getCurrentQuestion());
+      console.log('Answer:', transcript);
+      console.log('Overall Confidence Score:', confidenceMetrics.overallScore + '%');
+      console.log('Breakdown:');
+      console.log('  - Filler Word Score:', confidenceMetrics.fillerWordScore + '%');
+      console.log('  - Pause Score:', confidenceMetrics.pauseScore + '%');
+      console.log('  - Fluency Score:', confidenceMetrics.fluencyScore + '%');
+      
+      console.log('Detailed Metrics:');
+      console.log('  - Total Words:', confidenceMetrics.breakdown.totalWords);
+      console.log('  - Speech Rate:', Math.round(confidenceMetrics.breakdown.speechRate) + ' WPM');
+      console.log('  - Total Speaking Time:', confidenceMetrics.breakdown.totalSpeechTime.toFixed(2) + 's');
+      console.log('  - Total Pause Time:', confidenceMetrics.breakdown.totalPauseTime.toFixed(2) + 's');
+      console.log('  - Average Pause Duration:', confidenceMetrics.breakdown.averagePauseDuration.toFixed(2) + 's');
+      
+      if (confidenceMetrics.breakdown.fillerWords.length > 0) {
+        console.log('Filler Words Detected:');
+        confidenceMetrics.breakdown.fillerWords.forEach(filler => {
+          console.log(`  - "${filler.word}": ${filler.count} times (${filler.percentage.toFixed(1)}%)`);
+        });
+      } else {
+        console.log('No filler words detected - Great job!');
+      }
+      
+      if (confidenceMetrics.breakdown.pauses.length > 0) {
+        console.log('Pause Analysis:');
+        const pauseTypes = {
+          short: confidenceMetrics.breakdown.pauses.filter(p => p.type === 'short').length,
+          medium: confidenceMetrics.breakdown.pauses.filter(p => p.type === 'medium').length,
+          long: confidenceMetrics.breakdown.pauses.filter(p => p.type === 'long').length,
+          excessive: confidenceMetrics.breakdown.pauses.filter(p => p.type === 'excessive').length
+        };
+        console.log(`  - Short pauses (natural): ${pauseTypes.short}`);
+        console.log(`  - Medium pauses (thinking): ${pauseTypes.medium}`);
+        console.log(`  - Long pauses (uncertain): ${pauseTypes.long}`);
+        console.log(`  - Excessive pauses (low confidence): ${pauseTypes.excessive}`);
+      } else {
+        console.log('No significant pauses detected');
+      }
+      
+      // Performance feedback
+      console.log('Performance Summary:');
+      if (confidenceMetrics.overallScore >= 80) {
+        console.log('🟢 EXCELLENT: Very confident and clear delivery');
+      } else if (confidenceMetrics.overallScore >= 60) {
+        console.log('🟡 GOOD: Solid performance with room for improvement');
+      } else if (confidenceMetrics.overallScore >= 40) {
+        console.log('🟠 AVERAGE: Consider working on fluency and reducing filler words');
+      } else {
+        console.log('🔴 NEEDS WORK: Focus on speaking more confidently and clearly');
+      }
+      
+      console.log('==========================================');
+    }
+  }, [confidenceMetrics, transcript]);
+
   // Reset transcript states when question changes (successful submission)
   useEffect(() => {
     setDisplayedTranscript('');
     setTranscriptSubmitted(false);
     clearTranscript();
+    // Keep confidence metrics visible when moving to next question
   }, [currentQuestion]);
 
   // Handle completed transcription
   useEffect(() => {
     if (transcript && !isSpeechRecording && !isSpeechProcessing && !isProcessingResponse && !transcriptSubmitted) {
+      console.log('📝 Processing completed transcript:', transcript);
+      console.log('🔍 Checking for confidence metrics...');
+      
+      if (confidenceMetrics) {
+        console.log('✅ Confidence metrics available');
+      } else {
+        console.log('⚠️ No confidence metrics yet - they should arrive shortly');
+      }
+      
       // Add transcribed response to responses array
       const newResponses = [...responses];
       
@@ -937,6 +1018,16 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
               ))
             )}
           </div>
+
+          {/* Confidence Analysis */}
+          {showConfidenceAnalysis && currentConfidenceMetrics && (
+            <div className="border-t border-gray-200 flex-shrink-0">
+              <ConfidenceDisplay 
+                confidenceMetrics={currentConfidenceMetrics} 
+                className="m-4"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

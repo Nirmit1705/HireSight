@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { speechToTextAPI, TranscriptionResponse } from '../services/speechToTextAPI';
+import { speechToTextAPI, TranscriptionResponse, ConfidenceMetrics } from '../services/speechToTextAPI';
 
 export interface UseSpeechToTextReturn {
   isRecording: boolean;
@@ -7,6 +7,7 @@ export interface UseSpeechToTextReturn {
   transcript: string;
   error: string | null;
   confidence: number;
+  confidenceMetrics: ConfidenceMetrics | null;
   startRecording: () => Promise<boolean>;
   stopRecording: () => Promise<void>;
   clearTranscript: () => void;
@@ -18,6 +19,7 @@ export const useSpeechToText = (): UseSpeechToTextReturn => {
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [confidence, setConfidence] = useState(0);
+  const [confidenceMetrics, setConfidenceMetrics] = useState<ConfidenceMetrics | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -27,6 +29,7 @@ export const useSpeechToText = (): UseSpeechToTextReturn => {
       setError(null);
       setTranscript('');
       setConfidence(0);
+      setConfidenceMetrics(null);
 
       // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -101,10 +104,20 @@ export const useSpeechToText = (): UseSpeechToTextReturn => {
       if (result.success && result.transcript) {
         setTranscript(result.transcript);
         setConfidence(result.confidence || 0);
-        console.log('Transcription successful:', result.transcript);
+        setConfidenceMetrics(result.confidenceMetrics || null);
+        console.log('📞 Transcription API Response:');
+        console.log('  - Transcript:', result.transcript);
+        console.log('  - Basic Confidence:', result.confidence || 0);
+        
+        if (result.confidenceMetrics) {
+          console.log('  - Detailed Confidence Analysis: ✅ Available');
+          console.log('  - Overall Score:', result.confidenceMetrics.overallScore + '%');
+        } else {
+          console.log('  - Detailed Confidence Analysis: ❌ Not available');
+        }
       } else {
         setError(result.error || 'Transcription failed');
-        console.error('Transcription failed:', result.error);
+        console.error('❌ Transcription failed:', result.error);
       }
     } catch (error) {
       console.error('Error processing recording:', error);
@@ -119,6 +132,7 @@ export const useSpeechToText = (): UseSpeechToTextReturn => {
     setTranscript('');
     setError(null);
     setConfidence(0);
+    setConfidenceMetrics(null);
   }, []);
 
   return {
@@ -127,6 +141,7 @@ export const useSpeechToText = (): UseSpeechToTextReturn => {
     transcript,
     error,
     confidence,
+    confidenceMetrics,
     startRecording,
     stopRecording,
     clearTranscript,

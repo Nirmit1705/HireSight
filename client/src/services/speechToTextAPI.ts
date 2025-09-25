@@ -2,13 +2,44 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+export interface FillerWordAnalysis {
+  word: string;
+  count: number;
+  positions: number[];
+  percentage: number;
+}
+
+export interface PauseAnalysis {
+  duration: number;
+  position: number;
+  type: 'short' | 'medium' | 'long' | 'excessive';
+}
+
+export interface ConfidenceMetrics {
+  overallScore: number;
+  fillerWordScore: number;
+  pauseScore: number;
+  fluencyScore: number;
+  breakdown: {
+    totalWords: number;
+    fillerWords: FillerWordAnalysis[];
+    pauses: PauseAnalysis[];
+    averagePauseDuration: number;
+    speechRate: number;
+    totalSpeechTime: number;
+    totalPauseTime: number;
+  };
+}
+
 export interface TranscriptionResponse {
   success: boolean;
   transcript?: string;
   confidence?: number;
+  confidenceMetrics?: ConfidenceMetrics;
   metadata?: {
     duration?: number;
     model?: string;
+    wordCount?: number;
   };
   error?: string;
   details?: string;

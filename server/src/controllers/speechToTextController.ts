@@ -42,10 +42,19 @@ export const transcribeAudio = async (req: Request, res: Response) => {
       });
     }
 
+    // Extract additional parameters for technical analysis
+    const userAnswer = req.body.userAnswer || ''; // The full transcript text
+    const questionText = req.body.questionText || '';
+    const position = req.body.position || '';
+    const expectedKeywords = req.body.expectedKeywords ? JSON.parse(req.body.expectedKeywords) : undefined;
+
     console.log('Processing audio file:', {
       originalName: req.file.originalname,
       mimeType: req.file.mimetype,
-      size: req.file.size
+      size: req.file.size,
+      hasUserAnswer: !!userAnswer,
+      hasQuestionText: !!questionText,
+      position
     });
 
     // Use Deepgram to transcribe the audio
@@ -91,13 +100,37 @@ export const transcribeAudio = async (req: Request, res: Response) => {
         punctuated_word: word.punctuated_word
       }));
 
-      confidenceMetrics = speechAnalysis.analyzeConfidence(wordTimestamps);
+      // Extract parameters for technical analysis
+      const userAnswer = transcript.trim();
+      const questionText = req.body.questionText || '';
+      const position = req.body.position || '';
+      const expectedKeywords = req.body.expectedKeywords || [];
+      
+      console.log('📝 Technical Analysis Parameters:');
+      console.log('  - User Answer Length:', userAnswer.length, 'characters');
+      console.log('  - Question Text:', questionText.substring(0, 100) + '...');
+      console.log('  - Position:', position);
+      console.log('  - Expected Keywords:', expectedKeywords);
+      
+      confidenceMetrics = speechAnalysis.analyzeConfidence(
+        wordTimestamps,
+        userAnswer,
+        questionText,
+        position,
+        expectedKeywords
+      );
       
       console.log('✅ Confidence analysis completed:');
       console.log('  - Overall Score:', confidenceMetrics.overallScore + '%');
       console.log('  - Filler Words:', confidenceMetrics.breakdown.fillerWords.length);
       console.log('  - Pauses:', confidenceMetrics.breakdown.pauses.length);
       console.log('  - Speech Rate:', Math.round(confidenceMetrics.breakdown.speechRate), 'WPM');
+      console.log('  - Technical Score:', confidenceMetrics.technicalScore + '%');
+      if (confidenceMetrics.technicalAnalysis) {
+        console.log('  - Technical Keywords Matched:', confidenceMetrics.technicalAnalysis.breakdown.matchedKeywords.length);
+        console.log('  - Technical Keywords Missed:', confidenceMetrics.technicalAnalysis.breakdown.missedKeywords.length);
+        console.log('  - Answer Length:', confidenceMetrics.technicalAnalysis.breakdown.answerlength, 'chars');
+      }
     } else {
       console.log('⚠️ No word-level timestamps available for confidence analysis');
     }

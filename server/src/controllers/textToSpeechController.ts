@@ -8,7 +8,7 @@ export const synthesizeSpeech = async (req: Request, res: Response) => {
   try {
     const { text, voice = 'aura-luna-en' } = req.body;
 
-    if (!text) {
+    if (!text || text.trim().length === 0) {
       return res.status(400).json({ 
         success: false, 
         error: 'No text provided for synthesis' 
@@ -22,10 +22,13 @@ export const synthesizeSpeech = async (req: Request, res: Response) => {
       });
     }
 
-    console.log('Synthesizing speech for text:', {
-      textLength: text.length,
-      voice
-    });
+    // Log text length for debugging
+    console.log(`🎤 TTS Request - Text length: ${text.length} characters, Voice: ${voice}`);
+    
+    // Warn about potentially long processing times
+    if (text.length > 1000) {
+      console.log(`⚠️ Long text detected (${text.length} chars) - TTS may take longer than usual`);
+    }
 
     // Use Deepgram to synthesize speech
     const response = await deepgram.speak.request(
@@ -68,6 +71,29 @@ export const synthesizeSpeech = async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('Text-to-speech error:', error);
+    
+    // More specific error handling
+    if (error instanceof Error) {
+      if (error.message.includes('401') || error.message.includes('unauthorized')) {
+        return res.status(401).json({ 
+          success: false, 
+          error: 'Invalid Deepgram API key' 
+        });
+      }
+      if (error.message.includes('429')) {
+        return res.status(429).json({ 
+          success: false, 
+          error: 'API rate limit exceeded' 
+        });
+      }
+      if (error.message.includes('400')) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Invalid request parameters' 
+        });
+      }
+    }
+    
     res.status(500).json({ 
       success: false, 
       error: 'Failed to synthesize speech',

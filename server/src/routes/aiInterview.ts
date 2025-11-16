@@ -405,4 +405,11 @@ router.get('/contextual-health', async (req, res) => {
   await contextualController.healthCheck(req, res);
 });
 
+/**
+ * Debug endpoint to list active sessions (development only)
+ */
+router.get('/debug/active-sessions', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  await contextualController.listActiveSessions(req, res);
+});
+
 export default router;

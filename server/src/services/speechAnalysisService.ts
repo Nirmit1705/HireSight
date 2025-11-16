@@ -3,6 +3,9 @@
  * Analyzes speech patterns for confidence metrics including filler words and pauses
  */
 
+import { TechnicalKnowledgeService, TechnicalAnalysis, ExpectedKeyword } from './technicalKnowledgeService';
+import { VocabularyAnalysisService, VocabularyAnalysis } from './vocabularyAnalysisService';
+
 export interface WordTimestamp {
   word: string;
   start: number;
@@ -25,10 +28,14 @@ export interface FillerWordAnalysis {
 }
 
 export interface ConfidenceMetrics {
-  overallScore: number; // 0-100 scale
-  fillerWordScore: number; // 0-100 scale (lower filler words = higher score)
-  pauseScore: number; // 0-100 scale (optimal pauses = higher score)
-  fluencyScore: number; // 0-100 scale (combination of above)
+  overallScore: number; // 0-100 scale (rounded)
+  fillerWordScore: number; // 0-100 scale (lower filler words = higher score, rounded)
+  pauseScore: number; // 0-100 scale (optimal pauses = higher score, rounded)
+  fluencyScore: number; // 0-100 scale (combination of above, rounded)
+  technicalScore: number; // 0-100 scale (technical knowledge accuracy, rounded)
+  vocabularyScore: number; // 0-100 scale (vocabulary sophistication, rounded)
+  technicalAnalysis?: TechnicalAnalysis; // Detailed technical knowledge analysis
+  vocabularyAnalysis: VocabularyAnalysis; // Vocabulary sophistication analysis
   breakdown: {
     totalWords: number;
     fillerWords: FillerWordAnalysis[];
@@ -41,6 +48,14 @@ export interface ConfidenceMetrics {
 }
 
 export class SpeechAnalysisService {
+  private technicalKnowledgeService: TechnicalKnowledgeService;
+  private vocabularyAnalysisService: VocabularyAnalysisService;
+
+  constructor() {
+    this.technicalKnowledgeService = new TechnicalKnowledgeService();
+    this.vocabularyAnalysisService = new VocabularyAnalysisService();
+  }
+
   // Common filler words to detect
   private readonly FILLER_WORDS = new Set([
     'um', 'uh', 'ah', 'er', 'hmm', 'well', 'so', 'like', 'you know', 
@@ -58,8 +73,15 @@ export class SpeechAnalysisService {
 
   /**
    * Analyze confidence metrics from Deepgram word-level timestamps
+   * Includes technical knowledge analysis based on expected keywords
    */
-  analyzeConfidence(words: WordTimestamp[]): ConfidenceMetrics {
+  analyzeConfidence(
+    words: WordTimestamp[], 
+    userAnswer?: string, 
+    expectedKeywords?: ExpectedKeyword[], 
+    questionText?: string,
+    position?: string
+  ): ConfidenceMetrics {
     if (!words || words.length === 0) {
       return this.getDefaultMetrics();
     }
@@ -68,16 +90,43 @@ export class SpeechAnalysisService {
     const pauses = this.analyzePauses(words);
     const speechTiming = this.analyzeSpeechTiming(words, pauses);
 
-    // Calculate individual scores
-    const fillerWordScore = this.calculateFillerWordScore(fillerWords, words.length);
-    const pauseScore = this.calculatePauseScore(pauses, speechTiming.totalSpeechTime);
-    const fluencyScore = this.calculateFluencyScore(fillerWordScore, pauseScore);
+    // Calculate individual scores (all rounded to integers)
+    const fillerWordScore = Math.round(this.calculateFillerWordScore(fillerWords, words.length));
+    const pauseScore = Math.round(this.calculatePauseScore(pauses, speechTiming.totalSpeechTime));
+    const fluencyScore = Math.round(this.calculateFluencyScore(fillerWordScore, pauseScore));
 
-    // Overall confidence score (weighted combination)
+    // Technical knowledge analysis
+    let technicalScore = 70; // Default score if no technical analysis
+    let technicalAnalysis: TechnicalAnalysis | undefined;
+
+    if (userAnswer) {
+      // Generate expected keywords if not provided
+      let keywords = expectedKeywords;
+      if (!keywords && questionText && position) {
+        keywords = this.technicalKnowledgeService.generateExpectedKeywords(questionText, position);
+      }
+
+      if (keywords && keywords.length > 0) {
+        technicalAnalysis = this.technicalKnowledgeService.analyzeTechnicalKnowledge(
+          userAnswer, 
+          keywords, 
+          questionText
+        );
+        technicalScore = technicalAnalysis.overallScore;
+      }
+    }
+
+    // Analyze vocabulary sophistication
+    const vocabularyAnalysis = this.vocabularyAnalysisService.analyzeVocabulary(userAnswer || '');
+    const vocabularyScore = vocabularyAnalysis.vocabularyScore;
+
+    // Overall confidence score (weighted combination, rounded)
     const overallScore = Math.round(
-      (fillerWordScore * 0.4) + 
-      (pauseScore * 0.4) + 
-      (fluencyScore * 0.2)
+      (fillerWordScore * 0.20) + 
+      (pauseScore * 0.20) + 
+      (fluencyScore * 0.15) +
+      (technicalScore * 0.30) + // Technical knowledge has highest weight
+      (vocabularyScore * 0.15)   // Vocabulary sophistication
     );
 
     return {
@@ -85,6 +134,10 @@ export class SpeechAnalysisService {
       fillerWordScore,
       pauseScore,
       fluencyScore,
+      technicalScore,
+      vocabularyScore,
+      technicalAnalysis,
+      vocabularyAnalysis,
       breakdown: {
         totalWords: words.length,
         fillerWords,
@@ -280,6 +333,19 @@ export class SpeechAnalysisService {
       fillerWordScore: 0,
       pauseScore: 0,
       fluencyScore: 0,
+      technicalScore: 0,
+      vocabularyScore: 0,
+      vocabularyAnalysis: {
+        totalWords: 0,
+        uniqueWords: 0,
+        typeTokenRatio: 0,
+        vocabularyScore: 0,
+        vocabularyComplexity: 'basic',
+        averageWordLength: 0,
+        longWords: 0,
+        longWordPercentage: 0,
+        readabilityScore: 0
+      },
       breakdown: {
         totalWords: 0,
         fillerWords: [],

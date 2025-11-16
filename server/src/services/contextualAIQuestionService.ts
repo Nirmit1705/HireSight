@@ -25,6 +25,7 @@ export interface InterviewSession {
   }>;
   totalQuestionCount: number;
   isComplete: boolean;
+  randomSeed?: number; // Add seed for consistent randomization within session
 }
 
 export class ContextualAIQuestionService {
@@ -37,11 +38,41 @@ export class ContextualAIQuestionService {
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
     this.modelName = process.env.OLLAMA_MODEL || 'gemma3';
     this.conversationService = new ConversationService();
+    
+    // Debug session management
+    console.log('🚀 ContextualAIQuestionService initialized');
+  }
+
+  /**
+   * Get session information for debugging
+   */
+  getSessionInfo(sessionId: string): { exists: boolean; session?: InterviewSession; totalSessions: number; allSessionIds: string[] } {
+    return {
+      exists: this.sessions.has(sessionId),
+      session: this.sessions.get(sessionId),
+      totalSessions: this.sessions.size,
+      allSessionIds: Array.from(this.sessions.keys())
+    };
+  }
+
+  /**
+   * Check if session exists
+   */
+  hasSession(sessionId: string): boolean {
+    return this.sessions.has(sessionId);
   }
 
   async createInterviewSession(sessionId: string, resumeAnalysis: ResumeAnalysis): Promise<InterviewSession> {
     try {
       console.log('=== CREATING CONTEXTUAL INTERVIEW SESSION ===');
+      console.log('📝 Session ID:', sessionId);
+      console.log('📊 Current sessions before creation:', this.sessions.size);
+      
+      // Check if session already exists
+      if (this.sessions.has(sessionId)) {
+        console.log('⚠️ Session already exists, returning existing session');
+        return this.sessions.get(sessionId)!;
+      }
       
       // Check if Ollama is available
       const isOllamaHealthy = await this.healthCheck();
@@ -63,15 +94,17 @@ export class ContextualAIQuestionService {
         resumeAnalysis.domain || 'Software Engineering'
       );
 
-      // Calculate total questions
-      const baseQuestions = 8;
-      const projectBonus = Math.min(resumeAnalysis.projects?.length || 0, 3);
-      const experienceBonus = resumeAnalysis.workExperience?.length > 0 ? 2 : 0;
-      const skillBonus = Math.min(Math.floor(resumeAnalysis.skills.length / 3), 3);
+      // Calculate dynamic question count based on resume complexity and desired thoroughness
+      const baseQuestions = 12; // Increased base for more comprehensive interviews
+      const projectBonus = Math.min(resumeAnalysis.projects?.length || 0, 4);
+      const experienceBonus = resumeAnalysis.workExperience?.length > 0 ? 3 : 0;
+      const skillBonus = Math.min(Math.floor(resumeAnalysis.skills.length / 3), 4);
       
       let totalQuestionCount = baseQuestions + projectBonus + experienceBonus + skillBonus;
-      totalQuestionCount = Math.max(totalQuestionCount, 10);
-      totalQuestionCount = Math.min(totalQuestionCount, 15);
+      totalQuestionCount = Math.max(totalQuestionCount, 12); // Minimum 12 questions for thoroughness
+      totalQuestionCount = Math.min(totalQuestionCount, 20); // Maximum 20 to avoid fatigue
+      
+      console.log(`📊 Dynamic question calculation: Base=${baseQuestions}, Projects=${projectBonus}, Experience=${experienceBonus}, Skills=${skillBonus} → Total=${totalQuestionCount}`);
 
       // Generate the first question with context
       const firstQuestion = await this.generateContextualQuestion(sessionId, resumeAnalysis, [], 0, totalQuestionCount);
@@ -93,10 +126,15 @@ export class ContextualAIQuestionService {
         resumeAnalysis,
         conversationHistory: [],
         totalQuestionCount,
-        isComplete: false
+        isComplete: false,
+        randomSeed: Math.floor(Math.random() * 10000) // Generate unique seed per session
       };
 
       this.sessions.set(sessionId, session);
+      console.log('✅ Session created and stored successfully');
+      console.log('📊 Total sessions after creation:', this.sessions.size);
+      console.log('📋 All session IDs:', Array.from(this.sessions.keys()));
+      
       return session;
     } catch (error) {
       console.error('Error creating contextual interview session:', error);
@@ -111,10 +149,18 @@ export class ContextualAIQuestionService {
     isFollowUp: boolean;
     humanResponse?: string; // New field for human-like responses
   }> {
+    console.log('🔍 Processing response for sessionId:', sessionId);
+    console.log('📊 Current active sessions:', this.sessions.size);
+    console.log('📋 Available session IDs:', Array.from(this.sessions.keys()));
+    
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error('Session not found');
+      console.error('❌ Session not found for ID:', sessionId);
+      console.error('📊 Available sessions:', Array.from(this.sessions.keys()));
+      throw new Error(`Session not found: ${sessionId}. Available sessions: ${Array.from(this.sessions.keys()).join(', ')}`);
     }
+
+    console.log('✅ Session found. Current question index:', session.currentQuestionIndex);
 
     // Store candidate response in conversation
     await this.conversationService.addMessage(sessionId, {
@@ -142,16 +188,20 @@ export class ContextualAIQuestionService {
     
     // Analyze if candidate is staying on track
     const flowAnalysis = this.conversationService.analyzeConversationFlow(conversationFlow);
-
-    // Check if interview should complete
-    const minimumQuestions = 8;
-    const shouldComplete = session.responses.length >= session.totalQuestionCount && session.responses.length >= minimumQuestions;
     
-    if (shouldComplete) {
-      console.log(`🏁 CONTEXTUAL INTERVIEW COMPLETED: ${session.responses.length}/${session.totalQuestionCount} questions answered`);
+    console.log(`🔍 Flow Analysis: OnTopic=${flowAnalysis.isOnTopic}, Disruption=${flowAnalysis.flowDisruption}, RedirectionNeeded=${flowAnalysis.redirectionNeeded}, Confidence=${flowAnalysis.confidence}`);
+
+    // Check if interview should complete based on dynamic criteria
+    const minimumQuestions = 10;
+    const hasReachedMinimum = session.responses.length >= minimumQuestions;
+    const hasReachedTarget = session.responses.length >= session.totalQuestionCount;
+    const isTimeForCompletion = hasReachedMinimum && (hasReachedTarget || session.responses.length >= 18); // Absolute max 18 questions
+    
+    if (isTimeForCompletion) {
+      console.log(`🏁 CONTEXTUAL INTERVIEW COMPLETED: ${session.responses.length}/${session.totalQuestionCount} questions answered (min: ${minimumQuestions})`);
       session.isComplete = true;
       
-      // Generate a closing human response
+      // Generate a professional closing response
       const closingResponse = await this.generateHumanClosingResponse(sessionId);
       return { 
         nextQuestion: null, 
@@ -190,9 +240,10 @@ export class ContextualAIQuestionService {
       }
 
       // Handle redirection if candidate went off-topic
-      if (flowAnalysis.needsRedirection && !nextQuestion.isFollowUp) {
+      if (flowAnalysis.redirectionNeeded && !nextQuestion.isFollowUp) {
         const redirectionResponse = await this.generateRedirectionResponse(sessionId);
         humanResponse = redirectionResponse;
+        console.log('🔄 Applying flow redirection due to off-topic response');
       }
 
       // Store the new question in conversation
@@ -285,25 +336,125 @@ export class ContextualAIQuestionService {
 
     if (!lastInterviewerMessage) return false;
 
-    // Analyze response quality and depth
-    const responseLength = userResponse.trim().length;
-    const hasSpecificExamples = /example|instance|time when|situation where/i.test(userResponse);
-    const hasTechnicalDetails = /implement|code|algorithm|design|architecture/i.test(userResponse);
+    // Analyze response quality and depth more comprehensively
+    const responseAnalysis = this.analyzeResponseDepth(userResponse, lastInterviewerMessage.questionType);
     
-    // Generate follow-up if:
-    // 1. Response is too brief (less than 100 chars)
-    // 2. Response lacks examples/details for behavioral questions
-    // 3. Response needs technical clarification
+    // Get context to see how many times we've asked follow-ups on this topic
+    const context = await this.conversationService.getContext(sessionId);
+    const recentFollowUps = conversation
+      .filter(m => m.role === 'interviewer' && m.isFollowUp)
+      .slice(-3).length; // Count recent follow-ups
     
-    const isBrief = responseLength < 100;
-    const isLastQuestionBehavioral = lastInterviewerMessage.questionType === 'behavioral';
-    const isLastQuestionTechnical = lastInterviewerMessage.questionType === 'technical';
+    // Don't ask more than 2-3 follow-ups in a row to avoid being repetitive
+    if (recentFollowUps >= 2) {
+      console.log(`🔄 Limiting follow-ups: ${recentFollowUps} recent follow-ups detected`);
+      return false;
+    }
+
+    // Smart follow-up decision based on response analysis
+    const shouldFollowUp = this.determineFollowUpNeed(responseAnalysis, lastInterviewerMessage.questionType);
     
-    return (
-      isBrief ||
-      (isLastQuestionBehavioral && !hasSpecificExamples) ||
-      (isLastQuestionTechnical && !hasTechnicalDetails && Math.random() > 0.7) // 30% chance for technical follow-ups
-    );
+    console.log(`🤖 Follow-up decision: ${shouldFollowUp ? 'YES' : 'NO'} - Quality: ${responseAnalysis.quality}, Depth: ${responseAnalysis.depth}, Examples: ${responseAnalysis.hasExamples}`);
+    
+    return shouldFollowUp;
+  }
+
+  /**
+   * Analyze the depth and quality of the user's response
+   */
+  private analyzeResponseDepth(userResponse: string, questionType?: string): {
+    quality: 'poor' | 'fair' | 'good' | 'excellent';
+    depth: 'surface' | 'moderate' | 'detailed';
+    hasExamples: boolean;
+    hasTechnicalDetails: boolean;
+    hasQuantifiableResults: boolean;
+    length: number;
+    wordCount: number;
+  } {
+    const trimmedResponse = userResponse.trim();
+    const length = trimmedResponse.length;
+    const wordCount = trimmedResponse.split(/\s+/).filter(word => word.length > 0).length;
+
+    // Check for specific indicators
+    const hasExamples = /example|instance|time when|situation where|once|happened|case where|for instance/i.test(userResponse);
+    const hasTechnicalDetails = /implement|code|algorithm|design|architecture|framework|database|API|system|component|method|function|class|interface|pattern/i.test(userResponse);
+    const hasQuantifiableResults = /\d+%|increased|decreased|improved|reduced|\$\d+|million|thousand|users|customers|performance|efficiency|faster|slower|metric/i.test(userResponse);
+    const hasSpecificTools = /react|angular|vue|node|python|java|sql|mongodb|redis|aws|azure|docker|kubernetes/i.test(userResponse);
+    const hasProblemSolvingLanguage = /challenge|problem|issue|solution|approach|strategy|decision|analyze|evaluate|consider|alternative|trade-off/i.test(userResponse);
+
+    // Determine depth
+    let depth: 'surface' | 'moderate' | 'detailed';
+    if (length < 50 || wordCount < 10) {
+      depth = 'surface';
+    } else if ((length < 150 || wordCount < 25) && !hasExamples && !hasTechnicalDetails) {
+      depth = 'surface';
+    } else if (length < 300 || wordCount < 50) {
+      depth = 'moderate';
+    } else {
+      depth = 'detailed';
+    }
+
+    // Determine quality based on multiple factors
+    let qualityScore = 0;
+    if (hasExamples) qualityScore += 2;
+    if (hasTechnicalDetails && questionType === 'technical') qualityScore += 2;
+    if (hasQuantifiableResults) qualityScore += 2;
+    if (hasSpecificTools && questionType === 'technical') qualityScore += 1;
+    if (hasProblemSolvingLanguage) qualityScore += 1;
+    if (depth === 'detailed') qualityScore += 2;
+    if (depth === 'moderate') qualityScore += 1;
+    if (wordCount >= 30) qualityScore += 1;
+
+    let quality: 'poor' | 'fair' | 'good' | 'excellent';
+    if (qualityScore >= 6) quality = 'excellent';
+    else if (qualityScore >= 4) quality = 'good';
+    else if (qualityScore >= 2) quality = 'fair';
+    else quality = 'poor';
+
+    return {
+      quality,
+      depth,
+      hasExamples,
+      hasTechnicalDetails,
+      hasQuantifiableResults,
+      length,
+      wordCount
+    };
+  }
+
+  /**
+   * Determine if a follow-up question is needed based on response analysis
+   */
+  private determineFollowUpNeed(responseAnalysis: any, questionType?: string): boolean {
+    // Always follow up on poor quality responses
+    if (responseAnalysis.quality === 'poor') {
+      return true;
+    }
+
+    // Question-type specific logic
+    switch (questionType) {
+      case 'behavioral':
+      case 'situational':
+        // For behavioral questions, we need specific examples
+        return !responseAnalysis.hasExamples && responseAnalysis.quality !== 'excellent';
+      
+      case 'technical':
+      case 'project-specific':
+        // For technical questions, we need technical depth or specific details
+        return !responseAnalysis.hasTechnicalDetails && responseAnalysis.depth === 'surface';
+      
+      case 'experience':
+        // For experience questions, we want quantifiable results or specific examples
+        return !responseAnalysis.hasQuantifiableResults && !responseAnalysis.hasExamples && responseAnalysis.quality === 'fair';
+      
+      case 'problem-solving':
+        // For problem-solving, we want to see analytical thinking
+        return responseAnalysis.depth === 'surface' && responseAnalysis.quality !== 'excellent';
+      
+      default:
+        // General case: follow up if response is surface-level and not excellent quality
+        return responseAnalysis.depth === 'surface' && responseAnalysis.quality !== 'excellent';
+    }
   }
 
   private async generateContextualFollowUp(sessionId: string, userResponse: string): Promise<{
@@ -312,54 +463,159 @@ export class ContextualAIQuestionService {
   }> {
     try {
       const conversationContext = await this.conversationService.getConversationContextForAI(sessionId);
+      const conversation = await this.conversationService.getConversation(sessionId);
+      const lastInterviewerMessage = conversation
+        .filter(m => m.role === 'interviewer')
+        .slice(-1)[0];
       
-      const prompt = `You are a professional, conversational interviewer. Based on the following conversation context and the candidate's latest response, generate a natural follow-up question and a brief human-like acknowledgment.
+      const responseAnalysis = this.analyzeResponseDepth(userResponse, lastInterviewerMessage?.questionType);
+      const followUpType = this.determineFollowUpType(responseAnalysis, lastInterviewerMessage?.questionType);
+      
+      const prompt = `You are a professional, conversational interviewer conducting a contextual follow-up. 
 
+Current Conversation Context:
 ${conversationContext}
 
 Candidate's Latest Response: "${userResponse}"
 
+Response Analysis:
+- Quality: ${responseAnalysis.quality}
+- Depth: ${responseAnalysis.depth}
+- Has Examples: ${responseAnalysis.hasExamples}
+- Has Technical Details: ${responseAnalysis.hasTechnicalDetails}
+- Question Type: ${lastInterviewerMessage?.questionType || 'general'}
+
+Follow-up Type Needed: ${followUpType}
+
+Based on this analysis, generate a natural follow-up that ${this.getFollowUpObjective(followUpType)}.
+
 Generate a JSON response with exactly this format:
 {
-  "humanResponse": "A brief, natural acknowledgment (like 'That's interesting', 'I see', 'Good point', etc.)",
+  "humanResponse": "A brief, natural acknowledgment that shows you're listening (like 'That's interesting', 'I see', 'Good point', 'Tell me more about that', etc.)",
   "followUpQuestion": {
-    "text": "A natural follow-up question that digs deeper or asks for clarification",
+    "text": "A natural follow-up question based on the follow-up type needed",
     "category": "follow-up",
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "isFollowUp": true
   }
 }
 
-Make the human response feel natural and conversational. Make the follow-up question feel like a natural continuation of the conversation.`;
+Make the conversation feel natural and build on what they just said. Don't ask generic questions - be specific to their response.`;
 
       const response = await this.queryOllamaWithTimeout(prompt, 20000);
       const parsed = this.parseFollowUpResponse(response);
       
-      return {
-        question: {
-          id: `followup-${sessionId}-${Date.now()}`,
-          text: parsed.followUpQuestion.text,
-          category: 'follow-up',
-          difficulty: 'medium',
-          isFollowUp: true,
-          isHumanResponse: true
-        },
-        humanResponse: parsed.humanResponse
-      };
+      if (parsed && parsed.followUpQuestion) {
+        return {
+          question: {
+            id: `followup-${sessionId}-${Date.now()}`,
+            text: parsed.followUpQuestion.text,
+            category: 'follow-up',
+            difficulty: 'medium',
+            isFollowUp: true
+          },
+          humanResponse: parsed.humanResponse || "I'd like to dig a bit deeper into that."
+        };
+      } else {
+        // Fallback follow-up
+        return this.generateFallbackFollowUp(followUpType, userResponse);
+      }
     } catch (error) {
-      console.error('Failed to generate contextual follow-up:', error);
-      
-      // Fallback follow-up
-      return {
-        question: {
-          id: `fallback-followup-${sessionId}-${Date.now()}`,
-          text: "Could you elaborate on that a bit more? I'd like to understand your approach better.",
-          category: 'follow-up',
-          difficulty: 'medium',
-          isFollowUp: true
-        },
-        humanResponse: "That's interesting."
-      };
+      console.error('Error generating contextual follow-up:', error);
+      return this.generateFallbackFollowUp('clarification', userResponse);
     }
+  }
+
+  /**
+   * Determine what type of follow-up is needed
+   */
+  private determineFollowUpType(responseAnalysis: any, questionType?: string): string {
+    if (responseAnalysis.quality === 'poor' || responseAnalysis.depth === 'surface') {
+      if (responseAnalysis.length < 50) {
+        return 'expansion'; // "Can you elaborate on that?"
+      } else {
+        return 'clarification'; // "What specifically did you mean by...?"
+      }
+    }
+
+    switch (questionType) {
+      case 'behavioral':
+      case 'situational':
+        if (!responseAnalysis.hasExamples) {
+          return 'example_request'; // "Can you give me a specific example?"
+        } else {
+          return 'outcome_exploration'; // "What was the result?" or "What did you learn?"
+        }
+      
+      case 'technical':
+      case 'project-specific':
+        if (!responseAnalysis.hasTechnicalDetails) {
+          return 'technical_deep_dive'; // "How did you implement that technically?"
+        } else {
+          return 'challenge_exploration'; // "What challenges did you face?"
+        }
+      
+      case 'experience':
+        if (!responseAnalysis.hasQuantifiableResults) {
+          return 'impact_measurement'; // "What impact did that have?"
+        } else {
+          return 'learning_exploration'; // "What did you learn from that experience?"
+        }
+      
+      default:
+        return 'clarification';
+    }
+  }
+
+  /**
+   * Get the objective for each follow-up type
+   */
+  private getFollowUpObjective(followUpType: string): string {
+    const objectives: { [key: string]: string } = {
+      expansion: "encourages them to provide more detail and depth",
+      clarification: "asks for clarification on specific points they mentioned",
+      example_request: "asks for a specific example or concrete situation",
+      outcome_exploration: "explores the results, outcomes, or lessons learned",
+      technical_deep_dive: "digs into the technical implementation or approach",
+      challenge_exploration: "explores challenges faced and how they were overcome",
+      impact_measurement: "asks about measurable impact or quantifiable results",
+      learning_exploration: "explores what they learned or how they grew from the experience"
+    };
+    return objectives[followUpType] || "encourages them to elaborate further";
+  }
+
+  /**
+   * Generate a fallback follow-up when AI generation fails
+   */
+  private generateFallbackFollowUp(followUpType: string, userResponse: string): {
+    question: AIQuestion;
+    humanResponse: string;
+  } {
+    const fallbackQuestions: { [key: string]: string } = {
+      expansion: "Can you tell me more about that?",
+      clarification: "What specifically do you mean by that?",
+      example_request: "Can you give me a specific example?",
+      outcome_exploration: "What was the outcome of that situation?",
+      technical_deep_dive: "How did you approach that technically?",
+      challenge_exploration: "What challenges did you face with that?",
+      impact_measurement: "What impact did that have?",
+      learning_exploration: "What did you learn from that experience?"
+    };
+
+    const fallbackResponses = [
+      "That's interesting.", "I see.", "Tell me more about that.", "I'd like to understand that better."
+    ];
+
+    return {
+      question: {
+        id: `fallback-followup-${Date.now()}`,
+        text: fallbackQuestions[followUpType] || "Can you elaborate on that?",
+        category: 'follow-up',
+        difficulty: 'medium',
+        isFollowUp: true
+      },
+      humanResponse: fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)]
+    };
   }
 
   private async generateHumanAcknowledgment(sessionId: string, userResponse: string): Promise<string> {
@@ -424,6 +680,52 @@ Response:`;
     questionNumber: number,
     totalQuestions: number
   ): string {
+    
+    // Special handling for introduction questions
+    if (questionFocus.category === 'introduction') {
+      if (questionNumber === 0) {
+        return `You are a professional, friendly interviewer conducting a ${analysis.domain} interview. 
+
+Generate the FIRST question of the interview. This must be a warm, welcoming introduction question to make the candidate comfortable.
+
+Background: The candidate has skills in ${analysis.skills?.slice(0, 3).join(', ')} and experience in ${analysis.domain}.
+
+Generate a JSON response with this exact format:
+{
+  "text": "Your warm, introductory question that welcomes the candidate and asks them to introduce themselves or tell you about their background",
+  "category": "introduction",
+  "difficulty": "easy"
+}
+
+Examples of good introduction questions:
+- "Welcome! Thank you for taking the time to interview with us today. Could you start by telling me a bit about yourself and your background in [relevant field]?"
+- "Hi there! I'm excited to learn more about you. Could you walk me through your journey and what brought you to [field]?"
+- "Thanks for joining us today! I'd love to start by hearing about your experience and what you're passionate about in [field]."
+
+Make it sound natural and welcoming.`;
+      } else {
+        return `You are a professional interviewer. Continue the conversation naturally.
+
+${conversationContext}
+
+Generate a follow-up introduction question (${questionNumber + 1}/${totalQuestions}) that builds on the introduction.
+
+Requirements:
+- Ask about their background, motivations, or career journey
+- Keep it conversational and comfortable
+- Build on what they might have shared previously
+- Focus on: ${questionFocus.focusArea}
+
+Generate a JSON response with this exact format:
+{
+  "text": "Your natural follow-up question about their background or career journey",
+  "category": "introduction",
+  "difficulty": "easy"
+}`;
+      }
+    }
+
+    // For non-introduction questions
     return `You are a professional, conversational interviewer conducting a ${analysis.domain} interview. Be natural and human-like, not robotic.
 
 ${conversationContext}
@@ -437,6 +739,9 @@ Requirements:
 - Make questions relevant to their background: ${analysis.skills?.slice(0, 3).join(', ')}
 - Focus on: ${questionFocus.focusArea || questionFocus.category}
 - Difficulty: ${questionFocus.difficulty || 'medium'}
+- For technical questions: Focus on practical application, not just theory
+- For behavioral questions: Ask for specific examples and situations
+- For project questions: Ask about challenges, decisions, and learnings
 
 Generate a JSON response with this exact format:
 {
@@ -459,26 +764,88 @@ Make it sound like a real human conversation, not a formal assessment.`;
     const coveredCategories = previousQuestions.map(q => q.category);
     const topicsCovered = context?.topicHistory || [];
     
-    // Determine focus based on progress and conversation context
+    // ALWAYS start with introduction - this is the most critical fix
     if (questionNumber === 0) {
-      return { category: 'introduction', difficulty: 'easy' };
+      return { category: 'introduction', difficulty: 'easy', focusArea: 'personal introduction and background' };
     }
+
+    // Track topic depth - how many questions we've asked in each category
+    const categoryDepth: { [key: string]: number } = {};
+    coveredCategories.forEach(cat => {
+      categoryDepth[cat] = (categoryDepth[cat] || 0) + 1;
+    });
+
+    // Create a pool of question categories based on progress, with intelligent prioritization
+    let availableCategories: Array<{category: string, difficulty: string, focusArea?: string, priority: number}> = [];
     
     if (progress < 0.3) {
-      return { category: 'technical', difficulty: 'easy', focusArea: 'core skills' };
+      // Early questions (30%) - Focus on getting to know the candidate
+      availableCategories = [
+        { category: 'introduction', difficulty: 'easy', focusArea: 'background and experience overview', priority: 3 },
+        { category: 'experience', difficulty: 'easy', focusArea: 'recent work history', priority: 2 },
+        { category: 'motivation', difficulty: 'easy', focusArea: 'interest in role and company', priority: 2 },
+        { category: 'technical', difficulty: 'easy', focusArea: 'fundamental technical skills', priority: 1 }
+      ];
     } else if (progress < 0.6) {
-      if (!coveredCategories.includes('project-specific')) {
-        return { category: 'project-specific', difficulty: 'medium' };
-      }
-      return { category: 'technical', difficulty: 'medium', focusArea: 'advanced concepts' };
+      // Mid questions (30-60%) - Dive deeper into expertise and projects
+      availableCategories = [
+        { category: 'project-specific', difficulty: 'medium', focusArea: 'detailed project discussion', priority: 3 },
+        { category: 'technical', difficulty: 'medium', focusArea: 'technical problem-solving', priority: 3 },
+        { category: 'problem-solving', difficulty: 'medium', focusArea: 'analytical and critical thinking', priority: 2 },
+        { category: 'experience', difficulty: 'medium', focusArea: 'challenging work situations', priority: 1 }
+      ];
     } else if (progress < 0.8) {
-      if (!coveredCategories.includes('behavioral')) {
-        return { category: 'behavioral', difficulty: 'medium' };
-      }
-      return { category: 'problem-solving', difficulty: 'medium' };
+      // Later questions (60-80%) - Assess soft skills and cultural fit
+      availableCategories = [
+        { category: 'behavioral', difficulty: 'medium', focusArea: 'soft skills and teamwork', priority: 3 },
+        { category: 'situational', difficulty: 'medium', focusArea: 'hypothetical scenarios', priority: 2 },
+        { category: 'technical', difficulty: 'hard', focusArea: 'advanced technical concepts', priority: 2 },
+        { category: 'collaboration', difficulty: 'medium', focusArea: 'teamwork and communication', priority: 2 },
+        { category: 'leadership', difficulty: 'medium', focusArea: 'leadership and mentoring experience', priority: 1 }
+      ];
     } else {
-      return { category: 'situational', difficulty: 'hard', focusArea: 'leadership and decision making' };
+      // Final questions (80%+) - Future focus and wrap-up
+      availableCategories = [
+        { category: 'situational', difficulty: 'hard', focusArea: 'leadership and decision making', priority: 2 },
+        { category: 'behavioral', difficulty: 'hard', focusArea: 'conflict resolution and growth', priority: 2 },
+        { category: 'future-oriented', difficulty: 'medium', focusArea: 'career goals and aspirations', priority: 3 },
+        { category: 'closing', difficulty: 'easy', focusArea: 'questions for us and next steps', priority: 1 }
+      ];
     }
+
+    // Intelligent category selection based on coverage and priority
+    const categoriesWithScores = availableCategories.map(cat => {
+      const timesAsked = categoryDepth[cat.category] || 0;
+      const maxAllowed = cat.priority; // Use priority as max allowed questions in this phase
+      
+      // Calculate score: higher is better
+      let score = cat.priority * 10; // Base score from priority
+      score -= timesAsked * 15; // Penalty for repetition
+      score += Math.random() * 5; // Small randomization factor
+      
+      // Bonus for never-asked categories
+      if (timesAsked === 0) score += 20;
+      
+      return { ...cat, score, timesAsked, maxAllowed };
+    });
+
+    // Filter out categories that have been overused
+    const eligibleCategories = categoriesWithScores.filter(cat => 
+      cat.timesAsked < cat.maxAllowed || categoriesWithScores.every(c => c.timesAsked >= c.maxAllowed)
+    );
+
+    // Sort by score and pick the best one
+    const sortedCategories = eligibleCategories.sort((a, b) => b.score - a.score);
+    const selectedCategory = sortedCategories[0] || availableCategories[0];
+    
+    console.log(`Question ${questionNumber}: Selected ${selectedCategory.category} (${selectedCategory.difficulty}) - Score: ${selectedCategory.score}, Times Asked: ${selectedCategory.timesAsked}/${selectedCategory.maxAllowed}`);
+    console.log(`Available options: ${sortedCategories.slice(0, 3).map(c => `${c.category}(${c.score.toFixed(1)})`).join(', ')}`);
+    
+    return {
+      category: selectedCategory.category,
+      difficulty: selectedCategory.difficulty,
+      focusArea: selectedCategory.focusArea
+    };
   }
 
   private parseFollowUpResponse(response: string): any {
@@ -597,7 +964,15 @@ Make it sound like a real human conversation, not a formal assessment.`;
   }
 
   getSession(sessionId: string): InterviewSession | undefined {
-    return this.sessions.get(sessionId);
+    console.log('🔍 Getting session:', sessionId);
+    console.log('📊 Available sessions:', Array.from(this.sessions.keys()));
+    
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      console.error('❌ Session not found for ID:', sessionId);
+    }
+    
+    return session;
   }
 
   completeSession(sessionId: string): void {

@@ -95,6 +95,30 @@ export class ContextualInterviewController {
         });
       }
 
+      console.log('📝 Processing contextual answer for sessionId:', sessionId);
+      
+      // Check if session exists before processing
+      const sessionInfo = this.contextualAIService.getSessionInfo(sessionId);
+      console.log('📊 Session info:', sessionInfo);
+      
+      if (!sessionInfo.exists) {
+        console.error('❌ Session not found:', {
+          requestedSessionId: sessionId,
+          availableSessions: sessionInfo.allSessionIds,
+          totalSessions: sessionInfo.totalSessions
+        });
+        
+        return res.status(404).json({
+          success: false,
+          message: 'Interview session not found. The session may have expired or been lost due to server restart.',
+          debug: process.env.NODE_ENV === 'development' ? {
+            requestedSessionId: sessionId,
+            availableSessions: sessionInfo.allSessionIds,
+            totalSessions: sessionInfo.totalSessions
+          } : undefined
+        });
+      }
+
       // Process response with contextual AI
       const result = await this.contextualAIService.processResponse(sessionId, answer.trim());
 
@@ -397,5 +421,43 @@ export class ContextualInterviewController {
         engagement: Math.round(engagement)
       }
     };
+  }
+
+  /**
+   * Debug endpoint to list all active sessions
+   */
+  async listActiveSessions(req: AuthenticatedRequest, res: Response) {
+    try {
+      const sessions = [];
+      
+      // Get basic session info without exposing sensitive data
+      for (const [sessionId] of this.contextualAIService['sessions']) {
+        const sessionInfo = this.contextualAIService.getSessionInfo(sessionId);
+        sessions.push({
+          sessionId,
+          exists: sessionInfo.exists,
+          currentQuestionIndex: sessionInfo.session?.currentQuestionIndex || 0,
+          totalQuestions: sessionInfo.session?.totalQuestionCount || 0,
+          isComplete: sessionInfo.session?.isComplete || false,
+          responseCount: sessionInfo.session?.responses?.length || 0
+        });
+      }
+
+      res.json({
+        success: true,
+        totalActiveSessions: sessions.length,
+        sessions: process.env.NODE_ENV === 'development' ? sessions : sessions.length
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('List sessions error:', error);
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to list active sessions',
+        error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      });
+    }
   }
 }

@@ -1088,12 +1088,20 @@ export class ResumeProcessingService {
       /^\s*interests?\s*:?\s*$/i
     ];
     
-    // Achievement indicators
+    // Refined achievement patterns - focus on actual accomplishments
     const achievementPatterns = [
-      /\b(achieved|accomplished|delivered|implemented|developed|created|built|designed|led|managed)\b/i,
-      /\b(increased|decreased|improved|optimized|reduced|enhanced)\b/i,
-      /\b(award|recognition|certification|patent|publication)\b/i,
-      /\b(\d+%|\$\d+|millions?|thousands?)\b/i
+      /\b(won|awarded|achieved|earned|received|recognized)\b.*\b(award|prize|recognition|certificate|honor)\b/i,
+      /\b(increased|decreased|improved|optimized|reduced|enhanced|boosted)\b.*\b(\d+%|\$\d+|millions?|thousands?)\b/i,
+      /\b(led|managed|supervised)\b.*\b(team|project|department)\b.*\b(people|members|developers)\b/i,
+      /\b(published|presented|patent|research|paper|thesis)\b/i,
+      /\b(first place|winner|top\s*\d+|ranked\s*\d+|scored\s*\d+)\b/i
+    ];
+    
+    // Project-related patterns that should NOT be treated as achievements
+    const projectPatterns = [
+      /\b(built|developed|created|designed|implemented|coded|programmed)\b.*\b(system|application|website|app|platform|tool)\b/i,
+      /\b(using|with|technologies|stack|framework|library)\b/i,
+      /\b(react|angular|vue|node|java|python|javascript|html|css|sql|mongodb|mysql)\b/i
     ];
     
     // Bullet point indicators
@@ -1123,22 +1131,31 @@ export class ResumeProcessingService {
       if (inAchievementSection && trimmedLine.length > 10 && trimmedLine.length < 200) {
         // Clean up the achievement text
         const cleanAchievement = trimmedLine.replace(/^\s*[•·▪▫‣⁃\-*\d\.]\s*/, '').trim();
-        if (cleanAchievement) {
+        
+        // Filter out project descriptions that ended up in achievement sections
+        const isProjectDescription = projectPatterns.some(pattern => pattern.test(cleanAchievement));
+        
+        if (cleanAchievement && !isProjectDescription) {
           achievements.push(cleanAchievement);
           console.log('Found achievement in section:', cleanAchievement);
+        } else if (isProjectDescription) {
+          console.log('Filtered out project description from achievements:', cleanAchievement);
         }
       }
     }
     
     // Also scan for achievements throughout the text (outside dedicated sections)
+    // But be more selective to avoid including project descriptions
     for (const line of lines) {
       const trimmedLine = line.trim();
       
       if (trimmedLine.length > 10 && trimmedLine.length < 200) {
-        const hasAchievementPattern = achievementPatterns.some(pattern => pattern.test(trimmedLine));
+        const hasStrongAchievementPattern = achievementPatterns.some(pattern => pattern.test(trimmedLine));
+        const isProjectDescription = projectPatterns.some(pattern => pattern.test(trimmedLine));
         const isBulletPoint = bulletPatterns.some(pattern => pattern.test(trimmedLine));
         
-        if (hasAchievementPattern && (isBulletPoint || trimmedLine.includes('.'))) {
+        // Only include if it has strong achievement indicators AND is not a project description
+        if (hasStrongAchievementPattern && !isProjectDescription && (isBulletPoint || trimmedLine.includes('.'))) {
           const cleanAchievement = trimmedLine.replace(/^\s*[•·▪▫‣⁃\-*\d\.]\s*/, '').trim();
           if (cleanAchievement && !achievements.includes(cleanAchievement)) {
             achievements.push(cleanAchievement);

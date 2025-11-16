@@ -186,40 +186,6 @@ export class ConversationService {
   }
 
   /**
-   * Check if the conversation is staying on track
-   */
-  analyzeConversationFlow(conversation: ConversationMessage[]): {
-    isOnTrack: boolean;
-    needsRedirection: boolean;
-    lastTopicMention: string | null;
-  } {
-    if (conversation.length < 2) {
-      return { isOnTrack: true, needsRedirection: false, lastTopicMention: null };
-    }
-
-    const recentMessages = conversation.slice(-4); // Look at last 4 messages
-    const candidateResponses = recentMessages.filter(m => m.role === 'candidate');
-    
-    // Check if candidate is trying to divert from technical/professional topics
-    const offTopicKeywords = [
-      'personal life', 'family', 'hobbies', 'weekend', 'vacation',
-      'politics', 'religion', 'sports', 'weather', 'gossip'
-    ];
-    
-    const hasOffTopicContent = candidateResponses.some(response =>
-      offTopicKeywords.some(keyword =>
-        response.content.toLowerCase().includes(keyword)
-      )
-    );
-
-    return {
-      isOnTrack: !hasOffTopicContent,
-      needsRedirection: hasOffTopicContent,
-      lastTopicMention: null // Could be enhanced to detect specific topics
-    };
-  }
-
-  /**
    * Generate conversation context for AI prompts
    */
   async getConversationContextForAI(sessionId: string): Promise<string> {
@@ -299,6 +265,80 @@ Recent Conversation:`;
       topicsCovered: [context.currentTopic, ...context.topicHistory],
       duration
     };
+  }
+
+  /**
+   * Analyze conversation flow to detect if candidate is staying on topic
+   */
+  analyzeConversationFlow(conversation: ConversationMessage[]): {
+    isOnTopic: boolean;
+    flowDisruption: boolean;
+    redirectionNeeded: boolean;
+    confidence: number;
+  } {
+    if (conversation.length < 2) {
+      return { isOnTopic: true, flowDisruption: false, redirectionNeeded: false, confidence: 1.0 };
+    }
+
+    const lastInterviewerMessage = conversation.filter(m => m.role === 'interviewer').slice(-1)[0];
+    const lastCandidateMessage = conversation.filter(m => m.role === 'candidate').slice(-1)[0];
+
+    if (!lastInterviewerMessage || !lastCandidateMessage) {
+      return { isOnTopic: true, flowDisruption: false, redirectionNeeded: false, confidence: 1.0 };
+    }
+
+    // Analyze if candidate response is relevant to the question asked
+    const questionKeywords = this.extractKeywords(lastInterviewerMessage.content);
+    const responseKeywords = this.extractKeywords(lastCandidateMessage.content);
+    
+    // Check for topic relevance
+    const commonKeywords = questionKeywords.filter(keyword => 
+      responseKeywords.some(respKeyword => 
+        respKeyword.toLowerCase().includes(keyword.toLowerCase()) ||
+        keyword.toLowerCase().includes(respKeyword.toLowerCase())
+      )
+    );
+
+    const relevanceScore = commonKeywords.length / Math.max(questionKeywords.length, 1);
+    
+    // Detect flow disruption patterns
+    const disruptionPatterns = [
+      /let me tell you about/i,
+      /instead of that/i,
+      /what I really want to talk about/i,
+      /can we discuss/i,
+      /I'd prefer to/i
+    ];
+
+    const flowDisruption = disruptionPatterns.some(pattern => 
+      pattern.test(lastCandidateMessage.content)
+    );
+
+    // Determine if redirection is needed
+    const isOnTopic = relevanceScore > 0.3 || lastCandidateMessage.content.length < 50; // Short answers are usually on topic
+    const redirectionNeeded = flowDisruption || (!isOnTopic && relevanceScore < 0.2);
+
+    return {
+      isOnTopic,
+      flowDisruption,
+      redirectionNeeded,
+      confidence: relevanceScore
+    };
+  }
+
+  /**
+   * Extract keywords from text for topic analysis
+   */
+  private extractKeywords(text: string): string[] {
+    // Remove common stop words and extract meaningful terms
+    const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might', 'must', 'you', 'i', 'we', 'they', 'he', 'she', 'it', 'this', 'that', 'these', 'those']);
+    
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 3 && !stopWords.has(word))
+      .slice(0, 10); // Top 10 keywords
   }
 
   private getConversationKey(sessionId: string): string {

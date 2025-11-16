@@ -220,8 +220,10 @@ model Feedback {
   interviewOverallScore   Float?      // Overall interview percentage
   
   // Feedback content
-  strengths       String[]        // Array of strengths
-  improvements    FeedbackImprovement[]
+  strengths           String[]        // Array of strengths
+  improvements        FeedbackImprovement[]
+  performanceInsights String[]        // Array of performance insights (3-5 key insights)
+  aptitudeInsights    String[]        // Array of aptitude insights (3-5 key insights)
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

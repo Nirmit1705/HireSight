@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { InterviewQuestionService, InterviewQuestionData } from '../services/interviewQuestionService';
+import { AIFeedbackService, InterviewData } from '../services/aiFeedbackService';
 
 const prisma = new PrismaClient();
 
@@ -9,7 +10,43 @@ const prisma = new PrismaClient();
 // const interviewQuestionService = new InterviewQuestionService(redis);
 
 export class InterviewController {
-  constructor(private interviewQuestionService: InterviewQuestionService) {}
+  private aiFeedbackService: AIFeedbackService;
+
+  constructor(private interviewQuestionService: InterviewQuestionService) {
+    this.aiFeedbackService = new AIFeedbackService();
+  }
+
+  /**
+   * Map human-readable position to database enum
+   */
+  private mapPositionToEnum(position?: string): 'BACKEND_DEVELOPER' | 'FRONTEND_DEVELOPER' | 'FULL_STACK_DEVELOPER' | 'DATA_ANALYST' | 'AI_ML' | 'CLOUD' {
+    if (!position) return 'FULL_STACK_DEVELOPER';
+    
+    const positionMap: { [key: string]: 'BACKEND_DEVELOPER' | 'FRONTEND_DEVELOPER' | 'FULL_STACK_DEVELOPER' | 'DATA_ANALYST' | 'AI_ML' | 'CLOUD' } = {
+      'software engineering': 'FULL_STACK_DEVELOPER',
+      'software engineer': 'FULL_STACK_DEVELOPER',
+      'software-engineering': 'FULL_STACK_DEVELOPER',
+      'frontend developer': 'FRONTEND_DEVELOPER',
+      'frontend development': 'FRONTEND_DEVELOPER',
+      'backend developer': 'BACKEND_DEVELOPER',
+      'backend development': 'BACKEND_DEVELOPER',
+      'full stack developer': 'FULL_STACK_DEVELOPER',
+      'full stack development': 'FULL_STACK_DEVELOPER',
+      'fullstack developer': 'FULL_STACK_DEVELOPER',
+      'data scientist': 'DATA_ANALYST',
+      'data science': 'DATA_ANALYST',
+      'data analyst': 'DATA_ANALYST',
+      'ai/ml': 'AI_ML',
+      'artificial intelligence': 'AI_ML',
+      'machine learning': 'AI_ML',
+      'cloud engineer': 'CLOUD',
+      'cloud': 'CLOUD',
+      'devops': 'CLOUD'
+    };
+
+    const key = position.toLowerCase().trim();
+    return positionMap[key] || 'FULL_STACK_DEVELOPER';
+  }
 
   /**
    * Start a new interview
@@ -109,6 +146,135 @@ export class InterviewController {
       res.status(500).json({
         success: false,
         message: 'Failed to update question scores',
+      });
+    }
+  }
+
+  /**
+   * End interview with AI-generated feedback (for demo purposes)
+   */
+  async endInterviewWithFeedback(req: Request, res: Response) {
+    try {
+      const { interviewId } = req.params;
+      const { responses = [], duration = 1800, position } = req.body; // Get position from request
+
+      console.log('Ending interview:', interviewId);
+      console.log('Responses received:', responses.length);
+      console.log('Position received:', position);
+      console.log('Actual responses data:', JSON.stringify(responses, null, 2));
+
+      // For demo purposes, create a mock interview record if it doesn't exist
+      let interview = await prisma.interview.findUnique({
+        where: { id: interviewId },
+        include: { user: true }
+      });
+
+      if (!interview) {
+        // Create a demo interview record
+        const demoUser = await prisma.user.findFirst();
+        if (!demoUser) {
+          return res.status(400).json({
+            success: false,
+            message: 'No user found for demo. Please register first.',
+          });
+        }
+
+        interview = await prisma.interview.create({
+          data: {
+            id: interviewId,
+            userId: demoUser.id,
+            position: this.mapPositionToEnum(position) || 'FULL_STACK_DEVELOPER', // Use provided position or default
+            status: 'IN_PROGRESS',
+          },
+          include: { user: true }
+        });
+      }
+
+      // Ensure interview is not null at this point
+      if (!interview) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create or find interview record',
+        });
+      }
+
+      // Prepare interview data for AI analysis
+      const interviewData: InterviewData = {
+        position: interview.position,
+        duration: duration,
+        responses: responses.length > 0 ? responses : [
+          {
+            question: "Tell me about yourself and your background.",
+            answer: "I have over 5 years of experience in full-stack software development, working primarily with JavaScript, React, and Node.js. I've built scalable web applications using modern frameworks, implemented RESTful APIs, and worked extensively with databases like PostgreSQL and MongoDB. My expertise includes TypeScript, Docker containerization, and cloud deployment on AWS. I'm passionate about writing clean, maintainable code and following best practices in software architecture.",
+            confidence: 85,
+            duration: 120
+          },
+          {
+            question: "What are your key technical strengths?",
+            answer: "My core strengths include full-stack JavaScript development with React and Node.js, database design and optimization, API development, and system architecture. I'm proficient in modern development practices like test-driven development, CI/CD pipelines, and microservices architecture. I have strong problem-solving skills and experience with performance optimization, debugging complex systems, and implementing scalable solutions. I also have experience with cloud technologies, Docker, and DevOps practices.",
+            confidence: 90,
+            duration: 90
+          },
+          {
+            question: "Describe a challenging technical project you worked on.",
+            answer: "I led the development of a high-traffic e-commerce platform using React, Node.js, and PostgreSQL. The biggest challenge was handling concurrent user sessions and optimizing database queries for product searches. I implemented Redis caching, optimized SQL queries, and used load balancing to improve performance. We also integrated payment APIs, implemented real-time inventory tracking, and built a robust testing framework with Jest and Cypress. The project required careful architecture design to ensure scalability and maintainability.",
+            confidence: 80,
+            duration: 150
+          }
+        ]
+      };
+
+      console.log('Generating AI feedback...');
+
+      // Generate AI feedback
+      const generatedFeedback = await this.aiFeedbackService.generateComprehensiveFeedback(
+        interview.userId,
+        interviewData,
+        undefined // No aptitude data for pure interview feedback
+      );
+
+      console.log('Feedback generated:', generatedFeedback);
+
+      // Save feedback to database
+      await this.aiFeedbackService.saveFeedbackToDatabase(
+        interview.userId,
+        generatedFeedback,
+        interviewId,
+        undefined
+      );
+
+      // Clean up in-memory session if it exists
+      try {
+        await this.interviewQuestionService.completeInterviewSession(interviewId);
+      } catch (error) {
+        // Session might not exist, that's okay
+        console.log('No interview session to clean up');
+      }
+
+      // Get the complete feedback record with improvements
+      const completeFeedback = await prisma.feedback.findUnique({
+        where: { interviewId: interviewId },
+        include: {
+          improvements: true
+        }
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Interview completed and feedback generated',
+        feedback: completeFeedback,
+        interview: {
+          id: interview.id,
+          status: 'COMPLETED',
+          completedAt: new Date(),
+        }
+      });
+    } catch (error) {
+      console.error('Error ending interview with feedback:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to complete interview and generate feedback',
+        error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
       });
     }
   }

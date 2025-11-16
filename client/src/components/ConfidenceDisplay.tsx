@@ -1,5 +1,5 @@
-import React from 'react';
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Clock, MessageSquare } from 'lucide-react';
+import React, { useState } from 'react';
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Clock, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 import { ConfidenceMetrics } from '../services/speechToTextAPI';
 
 interface ConfidenceDisplayProps {
@@ -8,6 +8,8 @@ interface ConfidenceDisplayProps {
 }
 
 const ConfidenceDisplay: React.FC<ConfidenceDisplayProps> = ({ confidenceMetrics, className = '' }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (!confidenceMetrics) {
     return null;
   }
@@ -44,68 +46,76 @@ const ConfidenceDisplay: React.FC<ConfidenceDisplayProps> = ({ confidenceMetrics
   };
 
   return (
-    <div className={`bg-white rounded-lg p-4 border border-gray-200 shadow-sm ${className}`}>
-      <div className="flex items-center space-x-2 mb-4">
-        <MessageSquare className="h-5 w-5 text-gray-600" />
-        <h3 className="text-lg font-semibold text-gray-800">Speech Confidence Analysis</h3>
+    <div className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`}>
+      {/* Summary View - Always Visible */}
+      <div 
+        className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2">
+            <MessageSquare className="h-5 w-5 text-gray-600" />
+            <h3 className="text-base font-semibold text-gray-800">Speech Analysis</h3>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className={`flex items-center space-x-1 ${getScoreColor(confidenceMetrics.overallScore)}`}>
+              {getScoreIcon(confidenceMetrics.overallScore)}
+              <span className="font-bold text-lg">{confidenceMetrics.overallScore}%</span>
+            </div>
+            {isExpanded ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
+          </div>
+        </div>
+
+        {/* Compact Score Summary */}
+        <div className="grid grid-cols-5 gap-2">
+          <div className="text-center p-2 bg-gray-50 rounded">
+            <div className={`text-sm font-bold ${getScoreColor(confidenceMetrics.fillerWordScore)}`}>
+              {confidenceMetrics.fillerWordScore}%
+            </div>
+            <div className="text-xs text-gray-600">Clarity</div>
+          </div>
+          
+          <div className="text-center p-2 bg-gray-50 rounded">
+            <div className={`text-sm font-bold ${getScoreColor(confidenceMetrics.pauseScore)}`}>
+              {confidenceMetrics.pauseScore}%
+            </div>
+            <div className="text-xs text-gray-600">Fluency</div>
+          </div>
+          
+          <div className="text-center p-2 bg-gray-50 rounded">
+            <div className={`text-sm font-bold ${getScoreColor(confidenceMetrics.fluencyScore)}`}>
+              {confidenceMetrics.fluencyScore}%
+            </div>
+            <div className="text-xs text-gray-600">Flow</div>
+          </div>
+
+          <div className="text-center p-2 bg-gray-50 rounded">
+            <div className={`text-sm font-bold ${getScoreColor(confidenceMetrics.technicalScore)}`}>
+              {confidenceMetrics.technicalScore}%
+            </div>
+            <div className="text-xs text-gray-600">Technical</div>
+          </div>
+
+          <div className="text-center p-2 bg-gray-50 rounded">
+            <div className={`text-sm font-bold ${getScoreColor(confidenceMetrics.vocabularyScore)}`}>
+              {confidenceMetrics.vocabularyScore}%
+            </div>
+            <div className="text-xs text-gray-600">Vocabulary</div>
+          </div>
+        </div>
       </div>
 
-      {/* Overall Confidence Score */}
-      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Overall Confidence</span>
-          <div className={`flex items-center space-x-1 ${getScoreColor(confidenceMetrics.overallScore)}`}>
-            {getScoreIcon(confidenceMetrics.overallScore)}
-            <span className="font-bold text-lg">{confidenceMetrics.overallScore}%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Score Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-4">
-        <div className="text-center p-2 bg-gray-50 rounded">
-          <div className={`text-lg font-bold ${getScoreColor(confidenceMetrics.fillerWordScore)}`}>
-            {confidenceMetrics.fillerWordScore}%
-          </div>
-          <div className="text-xs text-gray-600">Clarity</div>
-          <div className="text-xs text-gray-500">(Filler Words)</div>
-        </div>
-        
-        <div className="text-center p-2 bg-gray-50 rounded">
-          <div className={`text-lg font-bold ${getScoreColor(confidenceMetrics.pauseScore)}`}>
-            {confidenceMetrics.pauseScore}%
-          </div>
-          <div className="text-xs text-gray-600">Fluency</div>
-          <div className="text-xs text-gray-500">(Pauses)</div>
-        </div>
-        
-        <div className="text-center p-2 bg-gray-50 rounded">
-          <div className={`text-lg font-bold ${getScoreColor(confidenceMetrics.fluencyScore)}`}>
-            {confidenceMetrics.fluencyScore}%
-          </div>
-          <div className="text-xs text-gray-600">Flow</div>
-          <div className="text-xs text-gray-500">(Combined)</div>
-        </div>
-
-        <div className="text-center p-2 bg-gray-50 rounded">
-          <div className={`text-lg font-bold ${getScoreColor(confidenceMetrics.technicalScore)}`}>
-            {confidenceMetrics.technicalScore}%
-          </div>
-          <div className="text-xs text-gray-600">Technical</div>
-          <div className="text-xs text-gray-500">(Knowledge)</div>
-        </div>
-
-        <div className="text-center p-2 bg-gray-50 rounded">
-          <div className={`text-lg font-bold ${getScoreColor(confidenceMetrics.vocabularyScore)}`}>
-            {confidenceMetrics.vocabularyScore}%
-          </div>
-          <div className="text-xs text-gray-600">Vocabulary</div>
-          <div className="text-xs text-gray-500">(Diversity)</div>
-        </div>
-      </div>
-
-      {/* Detailed Breakdown */}
-      <div className="space-y-3">
+      {/* Detailed Breakdown - Expandable */}
+      <div 
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="px-4 pb-4 space-y-3 border-t border-gray-200 pt-4">
         {/* Speech Statistics */}
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="flex items-center justify-between">
@@ -364,6 +374,7 @@ const ConfidenceDisplay: React.FC<ConfidenceDisplayProps> = ({ confidenceMetrics
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>

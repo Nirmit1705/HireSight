@@ -112,12 +112,13 @@ export const transcribeAudio = async (req: Request, res: Response) => {
       console.log('  - Position:', position);
       console.log('  - Expected Keywords:', expectedKeywords);
       
-      confidenceMetrics = speechAnalysis.analyzeConfidence(
+      // Correct parameter order: words, userAnswer, expectedKeywords, questionText, position
+      confidenceMetrics = await speechAnalysis.analyzeConfidence(
         wordTimestamps,
         userAnswer,
+        expectedKeywords,
         questionText,
-        position,
-        expectedKeywords
+        position
       );
       
       console.log('✅ Confidence analysis completed:');

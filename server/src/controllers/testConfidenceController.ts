@@ -40,7 +40,7 @@ export const testConfidenceAnalysis = async (req: Request, res: Response) => {
     ];
 
     // Analyze confidence metrics
-    const confidenceMetrics = speechAnalysis.analyzeConfidence(sampleWords);
+    const confidenceMetrics = await speechAnalysis.analyzeConfidence(sampleWords);
 
     res.json({
       success: true,
@@ -114,10 +114,10 @@ export const testConfidenceScenarios = async (req: Request, res: Response) => {
       }
     ];
 
-    const results = scenarios.map(scenario => ({
+    const results = await Promise.all(scenarios.map(async scenario => ({
       name: scenario.name,
-      metrics: speechAnalysis.analyzeConfidence(scenario.words as WordTimestamp[])
-    }));
+      metrics: await speechAnalysis.analyzeConfidence(scenario.words as WordTimestamp[])
+    })));
 
     res.json({
       success: true,

@@ -1,10 +1,6 @@
-/**
- * Speech Analysis Service
- * Analyzes speech patterns for confidence metrics including filler words and pauses
- */
-
 import { TechnicalKnowledgeService, TechnicalAnalysis, ExpectedKeyword } from './technicalKnowledgeService';
 import { VocabularyAnalysisService, VocabularyAnalysis } from './vocabularyAnalysisService';
+import axios from 'axios';
 
 export interface WordTimestamp {
   word: string;
@@ -50,10 +46,14 @@ export interface ConfidenceMetrics {
 export class SpeechAnalysisService {
   private technicalKnowledgeService: TechnicalKnowledgeService;
   private vocabularyAnalysisService: VocabularyAnalysisService;
+  private ollamaUrl: string;
+  private modelName: string;
 
   constructor() {
     this.technicalKnowledgeService = new TechnicalKnowledgeService();
     this.vocabularyAnalysisService = new VocabularyAnalysisService();
+    this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+    this.modelName = process.env.OLLAMA_MODEL || 'gemma3';
   }
 
   // Common filler words to detect
@@ -75,13 +75,13 @@ export class SpeechAnalysisService {
    * Analyze confidence metrics from Deepgram word-level timestamps
    * Includes technical knowledge analysis based on expected keywords
    */
-  analyzeConfidence(
+  async analyzeConfidence(
     words: WordTimestamp[], 
     userAnswer?: string, 
     expectedKeywords?: ExpectedKeyword[], 
     questionText?: string,
     position?: string
-  ): ConfidenceMetrics {
+  ): Promise<ConfidenceMetrics> {
     if (!words || words.length === 0) {
       return this.getDefaultMetrics();
     }
@@ -93,7 +93,37 @@ export class SpeechAnalysisService {
     // Calculate individual scores (all rounded to integers)
     const fillerWordScore = Math.round(this.calculateFillerWordScore(fillerWords, words.length));
     const pauseScore = Math.round(this.calculatePauseScore(pauses, speechTiming.totalSpeechTime));
-    const fluencyScore = Math.round(this.calculateFluencyScore(fillerWordScore, pauseScore));
+    
+    console.log('📊 Component Scores:', { fillerWordScore, pauseScore });
+    
+    // Calculate grammar score using LLM analysis
+    let grammarScore = 70; // Default fallback
+    if (userAnswer) {
+      try {
+        console.log('🤖 Using LLM for grammar analysis...');
+        console.log('📝 Input text:', userAnswer.substring(0, 100) + (userAnswer.length > 100 ? '...' : ''));
+        grammarScore = await this.calculateGrammarScoreWithLLM(userAnswer);
+        console.log('✅ LLM grammar analysis complete. Score:', grammarScore);
+      } catch (error) {
+        console.warn('⚠️ LLM grammar analysis failed, using rule-based fallback');
+        console.error('Error details:', error instanceof Error ? error.message : error);
+        grammarScore = this.calculateGrammarScoreFallback(userAnswer);
+        console.log('📋 Fallback grammar score:', grammarScore);
+      }
+    }
+    
+    console.log('📐 Grammar Score:', grammarScore);
+    
+    // Fluency now includes grammar analysis
+    const fluencyScore = Math.round(this.calculateFluencyScore(fillerWordScore, pauseScore, grammarScore));
+    
+    console.log('🎯 FLUENCY CALCULATION:', {
+      fillerWordScore,
+      pauseScore,
+      grammarScore,
+      calculatedFluency: fluencyScore,
+      formula: `(${fillerWordScore} * 0.3) + (${pauseScore} * 0.3) + (${grammarScore} * 0.4)`
+    });
 
     // Technical knowledge analysis
     let technicalScore = 70; // Default score if no technical analysis
@@ -117,7 +147,7 @@ export class SpeechAnalysisService {
     }
 
     // Analyze vocabulary sophistication
-    const vocabularyAnalysis = this.vocabularyAnalysisService.analyzeVocabulary(userAnswer || '');
+    const vocabularyAnalysis = await this.vocabularyAnalysisService.analyzeVocabulary(userAnswer || '');
     const vocabularyScore = vocabularyAnalysis.vocabularyScore;
 
     // Overall confidence score (weighted combination, rounded)
@@ -305,23 +335,214 @@ export class SpeechAnalysisService {
   }
 
   /**
-   * Calculate overall fluency score
+   * Calculate overall fluency score including grammar
    */
-  private calculateFluencyScore(fillerWordScore: number, pauseScore: number): number {
-    // Fluency is combination of smooth speech flow
-    const baseScore = (fillerWordScore + pauseScore) / 2;
+  private calculateFluencyScore(fillerWordScore: number, pauseScore: number, grammarScore: number): number {
+    // Fluency is combination of smooth speech flow AND proper grammar
+    // Grammar is now a major component (40% weight)
+    const baseScore = (fillerWordScore * 0.30) + (pauseScore * 0.30) + (grammarScore * 0.40);
     
-    // Bonus if both scores are high (synergistic effect)
-    if (fillerWordScore >= 80 && pauseScore >= 80) {
+    // Bonus if all aspects are high (synergistic effect)
+    if (fillerWordScore >= 80 && pauseScore >= 80 && grammarScore >= 80) {
       return Math.min(100, baseScore + 5);
     }
     
-    // Penalty if one aspect is very poor
+    // Penalty if grammar is very poor (grammar is critical for fluency)
+    if (grammarScore < 40) {
+      return Math.max(0, baseScore - 15);
+    }
+    
+    // Penalty if any aspect is very poor
     if (fillerWordScore < 40 || pauseScore < 40) {
       return Math.max(0, baseScore - 10);
     }
     
     return Math.round(baseScore);
+  }
+
+  /**
+   * Calculate grammar score using LLM analysis
+   */
+  private async calculateGrammarScoreWithLLM(text: string): Promise<number> {
+    if (!text || text.trim().length === 0) {
+      return 0;
+    }
+
+    const prompt = `Analyze this text for grammar quality. Score 0-100.
+
+Text: "${text}"
+
+Scoring:
+90-100: Excellent grammar
+75-89: Good, minor issues
+60-74: Acceptable, some errors
+40-59: Poor, multiple errors
+0-39: Very poor
+
+Respond with ONLY the number.`;
+
+    try {
+      const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
+        model: this.modelName,
+        prompt,
+        stream: false,
+        options: { 
+          temperature: 0.3,
+          num_predict: 5, // Only need a number
+          top_p: 0.9,
+        }
+      }, { 
+        timeout: 3000 // 3 second timeout - faster response
+      });
+
+      if (!response.data?.response) {
+        throw new Error('Invalid Ollama response');
+      }
+      
+      const scoreText = response.data.response.trim();
+      
+      // Extract number from response
+      const scoreMatch = scoreText.match(/\d+/);
+      if (scoreMatch) {
+        const score = parseInt(scoreMatch[0], 10);
+        // Ensure score is within bounds
+        return Math.max(0, Math.min(100, score));
+      }
+      
+      throw new Error('Could not extract score from LLM response');
+      
+    } catch (error) {
+      console.error('LLM grammar analysis error:', error);
+      throw error; // Re-throw to trigger fallback
+    }
+  }
+
+  /**
+   * Fallback grammar score calculation (rule-based)
+   * Used when LLM is unavailable
+   */
+  private calculateGrammarScoreFallback(text: string): number {
+    if (!text || text.trim().length === 0) {
+      return 0;
+    }
+
+    let score = 100;
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const words = text.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+    
+    if (sentences.length === 0 || words.length === 0) {
+      return 50; // Minimal text
+    }
+
+    // 1. Sentence structure analysis
+    const avgSentenceLength = words.length / sentences.length;
+    
+    // Too short sentences (< 4 words) or too long (> 30 words) indicate poor grammar
+    if (avgSentenceLength < 4) {
+      score -= 20; // Fragment-like sentences
+    } else if (avgSentenceLength > 30) {
+      score -= 15; // Run-on sentences
+    } else if (avgSentenceLength >= 8 && avgSentenceLength <= 20) {
+      score += 5; // Ideal sentence length
+    }
+
+    // 2. Check for articles and determiners (should be present in well-formed sentences)
+    const articlesAndDeterminers = ['the', 'a', 'an', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'its', 'our', 'their'];
+    const hasArticles = articlesAndDeterminers.some(article => 
+      words.includes(article) || words.some(w => w.startsWith(article + ' '))
+    );
+    
+    if (!hasArticles && words.length > 5) {
+      score -= 15; // Missing articles suggests poor grammar (e.g., "I good boy" vs "I am a good boy")
+    }
+
+    // 3. Check for verb presence and basic verb forms
+    const commonVerbs = ['am', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+                          'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 
+                          'can', 'could', 'should', 'may', 'might', 'must'];
+    const hasVerbs = commonVerbs.some(verb => words.includes(verb));
+    
+    if (!hasVerbs && words.length > 3) {
+      score -= 20; // Missing basic verbs suggests incomplete sentences
+    }
+
+    // 4. Subject-verb agreement patterns (basic check)
+    // Check for common mistakes like "I is", "we was", etc.
+    const grammarMistakes = [
+      /\bi is\b/i,
+      /\bhe are\b/i,
+      /\bshe are\b/i,
+      /\bit are\b/i,
+      /\bthey is\b/i,
+      /\bwe was\b/i,
+      /\byou was\b/i,
+      /\bthey was\b/i,
+      /\bi are\b/i,
+      /\bi were\b/i,
+      /\bhe am\b/i,
+      /\bshe am\b/i
+    ];
+    
+    const mistakeCount = grammarMistakes.filter(pattern => pattern.test(text)).length;
+    score -= mistakeCount * 15; // Heavy penalty for subject-verb agreement errors
+
+    // 5. Check for repeated words (stuttering or lack of fluency)
+    const wordPairs: string[] = [];
+    for (let i = 0; i < words.length - 1; i++) {
+      const cleanWord1 = words[i].replace(/[.,!?;:]/g, '');
+      const cleanWord2 = words[i + 1].replace(/[.,!?;:]/g, '');
+      if (cleanWord1 === cleanWord2 && cleanWord1.length > 2) {
+        wordPairs.push(cleanWord1);
+      }
+    }
+    score -= wordPairs.length * 10; // Penalty for word repetition
+
+    // 6. Check for proper sentence starts (capitalization pattern suggests structure)
+    const startsWithCapital = sentences.filter(s => {
+      const trimmed = s.trim();
+      return trimmed.length > 0 && /^[A-Z]/.test(trimmed);
+    }).length;
+    
+    const capitalizationRatio = startsWithCapital / sentences.length;
+    if (capitalizationRatio < 0.5) {
+      score -= 10; // Poor capitalization suggests informal or incomplete sentences
+    }
+
+    // 7. Check for prepositions and conjunctions (indicate complex, well-formed sentences)
+    const connectingWords = ['and', 'but', 'or', 'because', 'since', 'although', 'while', 
+                              'when', 'where', 'which', 'who', 'that', 'if', 'unless',
+                              'in', 'on', 'at', 'to', 'for', 'with', 'from', 'about'];
+    const connectingWordsCount = connectingWords.filter(word => words.includes(word)).length;
+    
+    if (connectingWordsCount === 0 && words.length > 8) {
+      score -= 10; // Lack of connecting words in longer answers suggests simple/choppy grammar
+    } else if (connectingWordsCount >= 3) {
+      score += 5; // Bonus for using connecting words (shows sentence complexity)
+    }
+
+    // 8. Check for pronoun usage (indicates proper sentence structure)
+    const pronouns = ['i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'];
+    const hasPronoun = pronouns.some(pronoun => words.includes(pronoun));
+    
+    if (!hasPronoun && words.length > 5) {
+      score -= 8; // Missing pronouns might indicate incomplete thoughts
+    }
+
+    // 9. Check for excessive one-word or two-word "sentences"
+    const veryShortSentences = sentences.filter(s => s.trim().split(/\s+/).length < 3).length;
+    if (veryShortSentences > sentences.length / 2) {
+      score -= 15; // Too many fragments
+    }
+
+    // 10. Bonus for variety in sentence structure
+    const sentenceLengths = sentences.map(s => s.trim().split(/\s+/).length);
+    const uniqueLengths = new Set(sentenceLengths).size;
+    if (uniqueLengths >= 3 && sentences.length >= 3) {
+      score += 5; // Varied sentence structure is good
+    }
+
+    // Ensure score is within bounds
+    return Math.max(0, Math.min(100, Math.round(score)));
   }
 
   /**

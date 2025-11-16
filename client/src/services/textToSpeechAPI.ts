@@ -34,15 +34,26 @@ export const textToSpeechAPI: TextToSpeechService = {
    */
   synthesizeSpeech: async (request: SynthesizeRequest): Promise<Blob> => {
     try {
-      console.log('🌐 [TTS API] Starting API request to server...');
-      console.log('🌐 [TTS API] Text length:', request.text.length, 'characters');
-      console.log('🌐 [TTS API] Voice:', request.voice);
-      const apiCallStartTime = performance.now();
+      const textLength = request.text.length;
+      
+      // For very long texts (>2000 characters), truncate to prevent extremely long TTS times
+      let processedText = request.text;
+      if (textLength > 2000) {
+        processedText = request.text.substring(0, 2000) + "...";
+        console.log(`⚠️ Text truncated from ${textLength} to ${processedText.length} characters for TTS performance`);
+      }
+      
+      // Calculate dynamic timeout based on text length
+      const baseTimeout = 30000; // 30 seconds base
+      const additionalTime = Math.max(0, (processedText.length - 500) * 100); // 100ms per extra character after 500
+      const dynamicTimeout = Math.min(baseTimeout + additionalTime, 120000); // Max 2 minutes
+      
+      console.log(`🔄 TTS Request - Text length: ${processedText.length}, Timeout: ${dynamicTimeout/1000}s`);
       
       const response = await axios.post(
         `${API_BASE_URL}/text-to-speech/synthesize`,
         {
-          text: request.text,
+          text: processedText,
           voice: request.voice || 'aura-luna-en',
         },
         {
@@ -50,20 +61,21 @@ export const textToSpeechAPI: TextToSpeechService = {
             'Content-Type': 'application/json',
           },
           responseType: 'blob',
-          timeout: 30000, // 30 second timeout
+          timeout: dynamicTimeout,
         }
       );
-      
-      const apiCallEndTime = performance.now();
-      const apiCallDuration = apiCallEndTime - apiCallStartTime;
-      console.log('🌐 [TTS API] API Response received in:', apiCallDuration, 'ms');
-      console.log('🌐 [TTS API] Response blob size:', response.data.size, 'bytes');
 
       return response.data;
     } catch (error) {
       console.error('Text-to-speech API error:', error);
       
       if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          throw new Error('Speech synthesis timed out. The text might be too long. Please try a shorter response.');
+        }
+        if (error.response?.status === 500) {
+          throw new Error('Speech synthesis service error. Please try again or use a shorter response.');
+        }
         throw new Error(error.response?.data?.error || 'Failed to synthesize speech');
       }
       

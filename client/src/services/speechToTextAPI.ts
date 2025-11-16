@@ -15,11 +15,45 @@ export interface PauseAnalysis {
   type: 'short' | 'medium' | 'long' | 'excessive';
 }
 
+export interface VocabularyAnalysis {
+  totalWords: number;
+  uniqueWords: number;
+  typeTokenRatio: number;
+  vocabularyScore: number;
+  vocabularyComplexity: 'basic' | 'intermediate' | 'advanced' | 'expert';
+  averageWordLength: number;
+  longWords: number;
+  longWordPercentage: number;
+  readabilityScore: number;
+}
+
+export interface TechnicalAnalysis {
+  overallScore: number;
+  foundKeywords: Array<{
+    keyword: string;
+    variations: string[];
+    confidence: number;
+    context: string;
+  }>;
+  missingKeywords: Array<{
+    keyword: string;
+    importance: number;
+    suggestions: string[];
+  }>;
+  suggestions: string[];
+  coverage: number;
+  accuracy: number;
+}
+
 export interface ConfidenceMetrics {
   overallScore: number;
   fillerWordScore: number;
   pauseScore: number;
   fluencyScore: number;
+  technicalScore: number;
+  vocabularyScore: number;
+  technicalAnalysis?: TechnicalAnalysis;
+  vocabularyAnalysis: VocabularyAnalysis;
   breakdown: {
     totalWords: number;
     fillerWords: FillerWordAnalysis[];

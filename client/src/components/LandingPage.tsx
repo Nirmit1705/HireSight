@@ -33,7 +33,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onLogin }) => {
               <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
                 <img src="/logo-2.png" alt="Hiresight Logo" className="h-16 w-16 sm:h-20 sm:w-20" />
                 <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-tight">
-                  Hiresight
+                  HireSight
                 </h1>
               </div>
             </div>
@@ -292,7 +292,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onLogin }) => {
             <div className="space-y-4 sm:space-y-6 sm:col-span-2 md:col-span-1">
               <div className="flex items-center space-x-2">
                 <img src="/logo.png" alt="Hiresight Logo" className="h-6 w-6 sm:h-8 sm:w-8" />
-                <span className="text-lg sm:text-xl font-bold">Hiresight</span>
+                <span className="text-lg sm:text-xl font-bold">HireSight</span>
               </div>
               <p className="text-gray-400 text-xs sm:text-sm leading-relaxed">
                 AI-powered interview preparation platform helping job seekers ace their interviews with confidence.
@@ -357,7 +357,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onLogin }) => {
           <div className="border-t border-gray-800 mt-8 sm:mt-12 pt-6 sm:pt-8">
             <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
               <div className="text-gray-400 text-xs sm:text-sm text-center md:text-left">
-                © 2025 Hiresight. All rights reserved.
+                © 2025 HireSight. All rights reserved.
               </div>
               <div className="flex items-center space-x-4 sm:space-x-6 text-xs sm:text-sm text-gray-400">
                 <a href="#" className="hover:text-white transition-colors">Privacy</a>

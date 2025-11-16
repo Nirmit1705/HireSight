@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AppState } from '../context/AppStateContext';
 import { ResumeAnalysis } from '../services/aiInterviewAPI';
+import { InterviewFeedback } from '../services/interviewAPI';
 
 export const useAppState = (): AppState => {
   const [selectedPosition, setSelectedPosition] = useState('');
@@ -10,6 +11,7 @@ export const useAppState = (): AppState => {
   const [hasPreviousAptitudeScore, setHasPreviousAptitudeScore] = useState(false);
   const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(null);
   const [isAiMode, setIsAiMode] = useState(false);
+  const [feedbackData, setFeedbackData] = useState<InterviewFeedback | null>(null);
 
   return {
     selectedPosition,
@@ -26,5 +28,7 @@ export const useAppState = (): AppState => {
     setResumeAnalysis,
     isAiMode,
     setIsAiMode,
+    feedbackData,
+    setFeedbackData,
   };
 };

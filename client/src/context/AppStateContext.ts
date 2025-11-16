@@ -1,5 +1,6 @@
 import { createContext } from 'react';
 import { ResumeAnalysis } from '../services/aiInterviewAPI';
+import { InterviewFeedback } from '../services/interviewAPI';
 
 // App State Context
 export interface AppState {
@@ -17,6 +18,8 @@ export interface AppState {
   setResumeAnalysis: (analysis: ResumeAnalysis | null) => void;
   isAiMode: boolean;
   setIsAiMode: (isAi: boolean) => void;
+  feedbackData: InterviewFeedback | null;
+  setFeedbackData: (feedback: InterviewFeedback | null) => void;
 }
 
 export const AppStateContext = createContext<AppState | undefined>(undefined);

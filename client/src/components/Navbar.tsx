@@ -59,7 +59,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate, isAuthenticate
               onClick={() => onNavigate(isAuthenticated ? 'dashboard' : 'landing')}
             >
               <img src="/logo.png" alt="Hiresight Logo" className="h-7 w-7 sm:h-9 sm:w-9" />
-              <span className="text-lg sm:text-2xl font-bold text-white">Hiresight</span>
+              <span className="text-lg sm:text-2xl font-bold text-white">HireSight</span>
             </div>
 
             {/* Desktop Navigation Links */}

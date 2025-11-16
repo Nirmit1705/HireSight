@@ -12,6 +12,7 @@ import AssessmentFlow from './components/AssessmentFlow';
 import AuthSuccess from './pages/AuthSuccess';
 import AuthError from './pages/AuthError';
 import { AppState } from './context/AppStateContext';
+import { InterviewFeedback } from './services/interviewAPI';
 
 export type PageType = 'landing' | 'dashboard' | 'position' | 'aptitude' | 'interview' | 'feedback' | 'profile' | 'history' | 'history-detail' | 'practice' | 'practice-aptitude' | 'assessment' | 'assessment-position' | 'auth-success' | 'auth-error';
 
@@ -27,7 +28,7 @@ export interface RouteConfig {
 // Route definitions
 export const createRouteConfig = (
   appState: AppState, 
-  handleNavigate: (page: PageType, historyId?: string) => void,
+  handleNavigate: (page: PageType, historyId?: string, feedbackData?: InterviewFeedback) => void,
   handleLogin: () => void,
   HistoryDetailWrapper: React.ComponentType<{ onNavigate: (page: PageType, historyId?: string) => void }>
 ): RouteConfig[] => [
@@ -132,7 +133,8 @@ export const createRouteConfig = (
       position: appState.selectedPosition,
       domain: appState.selectedDomain,
       testScore: appState.testScore,
-      interviewScore: appState.interviewScore
+      interviewScore: appState.interviewScore,
+      feedbackData: appState.feedbackData
     }
   },
   {

@@ -37,43 +37,34 @@ export const useTextToSpeech = (options: UseTextToSpeechOptions = {}): UseTextTo
       setIsLoading(true);
       setError(null);
 
-      console.log('🔄 [TTS HOOK] Starting TTS process for:', text.substring(0, 50) + '...');
-      const hookStartTime = performance.now();
+      const textLength = text.length;
+      const isLongText = textLength > 1000;
+      
+      console.log(`🔄 [TTS HOOK] Starting TTS process - Text length: ${textLength} chars`);
+      
+      if (isLongText) {
+        console.log('⏳ Long text detected - TTS may take up to 2 minutes');
+      }
 
       // Stop any currently playing audio
       stop();
-
-      console.log('⏱️ [TTS HOOK] About to call Deepgram API...');
-      const apiStartTime = performance.now();
 
       const audioBlob = await textToSpeechAPI.synthesizeSpeech({
         text,
         voice: currentVoice,
       });
 
-      const apiEndTime = performance.now();
-      const apiDuration = apiEndTime - apiStartTime;
-      console.log('⏱️ [TTS HOOK] Deepgram API Response Time:', apiDuration, 'ms');
-
       if (options.autoplay !== false) {
         setIsPlaying(true);
-        
-        console.log('⏱️ [TTS HOOK] Creating audio URL and element...');
-        const audioSetupStartTime = performance.now();
         
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         currentAudioRef.current = audio;
         
-        const audioSetupEndTime = performance.now();
-        const audioSetupDuration = audioSetupEndTime - audioSetupStartTime;
-        console.log('⏱️ [TTS HOOK] Audio Setup Time:', audioSetupDuration, 'ms');
-        
         audio.onended = () => {
           setIsPlaying(false);
           URL.revokeObjectURL(audioUrl);
           currentAudioRef.current = null;
-          console.log('🏁 [TTS HOOK] Audio playback ended');
         };
         
         audio.onerror = (error) => {
@@ -84,18 +75,7 @@ export const useTextToSpeech = (options: UseTextToSpeechOptions = {}): UseTextTo
           console.error('❌ [TTS HOOK] Audio playback error:', error);
         };
 
-        console.log('⏱️ [TTS HOOK] About to start audio playback...');
-        const playbackStartTime = performance.now();
-        
         await audio.play();
-        
-        const playbackEndTime = performance.now();
-        const playbackStartDuration = playbackEndTime - playbackStartTime;
-        const totalDuration = playbackEndTime - hookStartTime;
-        
-        console.log('⏱️ [TTS HOOK] Audio Play() Call Time:', playbackStartDuration, 'ms');
-        console.log('⏱️ [TTS HOOK] TOTAL TTS TIME (API + Setup + Play):', totalDuration, 'ms');
-        console.log('🎵 [TTS HOOK] Audio should be playing now!');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to synthesize speech';

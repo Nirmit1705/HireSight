@@ -70,7 +70,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
                 <User className="h-10 w-10 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold mb-2">John Doe</h1>
+                <h1 className="text-3xl font-bold mb-2">Patel Nirmit</h1>
                 <p className="text-gray-600">Aspiring Software Developer</p>
               </div>
             </div>

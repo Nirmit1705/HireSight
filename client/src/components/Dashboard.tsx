@@ -23,19 +23,19 @@ const Dashboard: React.FC = () => {
     aptitudeScore: 81, // Latest aptitude test score
     interviewScore: 76, // Latest interview score
     overallPerformance: 78, // Average score across all tests
-    completedSessions: 20 // Total interviews + aptitude tests
+    completedSessions: 6 // Total interviews + aptitude tests
   };
 
   // Performance trend data (same as in PerformanceTrendChart)
   const performanceData = [
-    { date: '2024-01-08', overallScore: 75, sessionNumber: 1 },
-    { date: '2024-01-15', overallScore: 65, sessionNumber: 2 },
-    { date: '2024-01-18', overallScore: 88, sessionNumber: 3 },
-    { date: '2024-02-22', overallScore: 71, sessionNumber: 4 },
-    { date: '2024-03-25', overallScore: 54, sessionNumber: 5 },
-    { date: '2024-06-28', overallScore: 76, sessionNumber: 6 },
-    { date: '2024-07-01', overallScore: 78, sessionNumber: 7 },
-    { date: '2024-08-05', overallScore: 90, sessionNumber: 8 },
+    { date: '2025-01-08', overallScore: 75, sessionNumber: 1 },
+    { date: '2025-01-15', overallScore: 65, sessionNumber: 2 },
+    { date: '2025-01-18', overallScore: 88, sessionNumber: 3 },
+    { date: '2025-02-22', overallScore: 71, sessionNumber: 4 },
+    { date: '2025-03-25', overallScore: 54, sessionNumber: 5 },
+    { date: '2025-06-28', overallScore: 76, sessionNumber: 6 },
+    { date: '2025-07-01', overallScore: 78, sessionNumber: 7 },
+    { date: '2025-08-05', overallScore: 90, sessionNumber: 8 },
   ];
 
   // Calculate performance stats
@@ -71,7 +71,7 @@ const Dashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-black mb-2">Welcome back, John!</h1>
+            <h1 className="text-3xl font-bold text-black mb-2">Welcome back, Patel Nirmit!</h1>
             <p className="text-gray-600">Track your progress and improve your interview skills</p>
           </div>
 

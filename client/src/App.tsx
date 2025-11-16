@@ -7,6 +7,7 @@ import { useAuth } from './hooks/useAuth';
 import { useAppState } from './hooks/useAppState';
 import { useHistoryManager } from './hooks/useHistoryManager';
 import { createRouteConfig, PageType } from './routes';
+import { InterviewFeedback } from './services/interviewAPI';
 
 export type { PageType } from './routes';
 
@@ -18,7 +19,15 @@ function AppContent() {
   
   useHistoryManager(appState, isAuthenticated);
 
-  const handleNavigate = (page: PageType, historyId?: string) => {
+  const handleNavigate = (page: PageType, historyId?: string, feedbackData?: InterviewFeedback) => {
+    console.log('HandleNavigate called with:', { page, historyId, feedbackData: !!feedbackData });
+    
+    // Set feedback data if provided
+    if (feedbackData) {
+      console.log('Setting feedback data in app state:', feedbackData);
+      appState.setFeedbackData(feedbackData);
+    }
+
     const routeConfig = createRouteConfig(appState, handleNavigate, handleLogin, () => null);
     const route = routeConfig.find(r => r.pageKey === page);
     
@@ -47,16 +56,23 @@ function AppContent() {
     return currentRoute?.pageKey || 'landing';
   };
 
+  const isInterviewPage = (): boolean => {
+    const currentPage = getCurrentPage();
+    return currentPage === 'interview';
+  };
+
   return (
     <AppProviders appState={appState}>
       <div className="min-h-screen bg-white text-black font-inter">
-        <Navbar 
-          currentPage={getCurrentPage()} 
-          onNavigate={handleNavigate} 
-          isAuthenticated={isAuthenticated}
-          onLogin={handleLogin}
-          onLogout={handleLogout}
-        />
+        {!isInterviewPage() && (
+          <Navbar 
+            currentPage={getCurrentPage()} 
+            onNavigate={handleNavigate} 
+            isAuthenticated={isAuthenticated}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+          />
+        )}
         <main className="relative">
           <AppRoutes
             appState={appState}

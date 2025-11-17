@@ -138,15 +138,44 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
         if (interviewData) {
           console.log('✅ Loaded interview with feedback:', interviewData);
           
-          // Fetch latest aptitude score separately
-          let latestAptitudeScore = 0;
-          try {
-            const aptitudeHistory = await aptitudeAPI.getTestHistory();
-            if (aptitudeHistory && aptitudeHistory.length > 0) {
-              latestAptitudeScore = Math.round(aptitudeHistory[0].overallScore || 0);
+          // Fetch linked aptitude test data if aptitudeTestId exists
+          let linkedAptitudeScore = 0;
+          let linkedAptitudeScores = undefined;
+          
+          if (interviewData.aptitudeTestId) {
+            try {
+              console.log('🔗 Fetching linked aptitude test:', interviewData.aptitudeTestId);
+              const linkedTest = await aptitudeAPI.getTestResults(interviewData.aptitudeTestId);
+              linkedAptitudeScore = Math.round(linkedTest.overallScore || 0);
+              linkedAptitudeScores = {
+                domainKnowledgeScore: linkedTest.domainKnowledgeScore,
+                quantitativeScore: linkedTest.quantitativeScore,
+                verbalAbilityScore: linkedTest.verbalAbilityScore,
+                logicalReasoningScore: linkedTest.logicalReasoningScore
+              };
+              console.log('✅ Linked aptitude test scores:', linkedAptitudeScores);
+            } catch (aptError) {
+              console.log('Could not fetch linked aptitude test:', aptError);
+              // Fallback to latest aptitude score
+              try {
+                const aptitudeHistory = await aptitudeAPI.getTestHistory();
+                if (aptitudeHistory && aptitudeHistory.length > 0) {
+                  linkedAptitudeScore = Math.round(aptitudeHistory[0].overallScore || 0);
+                }
+              } catch (fallbackError) {
+                console.log('No aptitude history found:', fallbackError);
+              }
             }
-          } catch (aptError) {
-            console.log('No aptitude history found:', aptError);
+          } else {
+            // No linked test, try to get latest aptitude score
+            try {
+              const aptitudeHistory = await aptitudeAPI.getTestHistory();
+              if (aptitudeHistory && aptitudeHistory.length > 0) {
+                linkedAptitudeScore = Math.round(aptitudeHistory[0].overallScore || 0);
+              }
+            } catch (aptError) {
+              console.log('No aptitude history found:', aptError);
+            }
           }
           
           setHistoryItem({
@@ -158,8 +187,10 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
             domain: interviewData.domain,
             duration: interviewData.duration ? `${interviewData.duration}:00` : '0:00',
             status: 'completed',
-            testScore: latestAptitudeScore,
+            testScore: linkedAptitudeScore,
             interviewScore: Math.round(interviewData.overallScore || 0),
+            // Include linked aptitude test category scores if available
+            ...(linkedAptitudeScores && linkedAptitudeScores),
             // Include all interview scores
             fluencyScore: interviewData.fluencyScore,
             grammarScore: interviewData.grammarScore,

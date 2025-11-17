@@ -6,6 +6,8 @@ import metadataRoutes from './metadata';
 import aiInterviewRoutes from './aiInterview';
 import speechToTextRoutes from './speechToText';
 import textToSpeechRoutes from './textToSpeech';
+import dashboardRoutes from './dashboard';
+import userRoutes from './user';
 
 const router = Router();
 
@@ -38,5 +40,11 @@ router.use('/speech-to-text', speechToTextRoutes);
 
 // Text-to-speech routes
 router.use('/text-to-speech', textToSpeechRoutes);
+
+// Dashboard routes
+router.use('/dashboard', dashboardRoutes);
+
+// User profile routes
+router.use('/user', userRoutes);
 
 export default router;

@@ -25,11 +25,29 @@ const PerformanceTrendChart: React.FC<PerformanceTrendChartProps> = ({ data }) =
     { date: '2024-08-05', overallScore: 90, sessionNumber: 8 },
   ];
 
-  // Add timestamps to the data
-  const chartData = (data || defaultData).map(item => ({
-    ...item,
-    timestamp: new Date(item.date).getTime()
-  }));
+  // Add timestamps to the data and handle multiple sessions on the same day
+  const chartData = (data || defaultData).map((item, index, array) => {
+    const baseTimestamp = new Date(item.date).getTime();
+    
+    // Check if there are other sessions on the same date
+    const sameDateSessions = array.filter(d => d.date === item.date);
+    
+    if (sameDateSessions.length > 1) {
+      // Find the index of this session among sessions on the same date
+      const sameDateIndex = sameDateSessions.findIndex(d => d.sessionNumber === item.sessionNumber);
+      // Add small offset (1 hour per session) to spread points horizontally
+      const offset = sameDateIndex * (60 * 60 * 1000); // 1 hour in milliseconds
+      return {
+        ...item,
+        timestamp: baseTimestamp + offset
+      };
+    }
+    
+    return {
+      ...item,
+      timestamp: baseTimestamp
+    };
+  });
 
   // Custom tooltip component
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -55,43 +73,29 @@ const PerformanceTrendChart: React.FC<PerformanceTrendChartProps> = ({ data }) =
     return null;
   };
 
-  // Format date for x-axis with dynamic intervals
+  // Format date for x-axis in "Mon YY" format
   const formatXAxisDate = (timestamp: number) => {
     const date = new Date(timestamp);
-    const dataRange = Math.max(...chartData.map(d => d.timestamp)) - Math.min(...chartData.map(d => d.timestamp));
-    const daysDiff = dataRange / (1000 * 60 * 60 * 24);
-    
-    // Dynamic formatting based on date range
-    if (daysDiff > 180) { // More than 6 months
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        year: '2-digit' 
-      });
-    } else if (daysDiff > 60) { // More than 2 months
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    } else { // Less than 2 months
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    }
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      year: '2-digit' 
+    });
   };
 
-  // Calculate proper tick interval
-  const getTickInterval = () => {
-    const dataRange = Math.max(...chartData.map(d => d.timestamp)) - Math.min(...chartData.map(d => d.timestamp));
-    const daysDiff = dataRange / (1000 * 60 * 60 * 24);
+  // Generate unique ticks to avoid duplicate month labels
+  const getUniqueTicks = () => {
+    const seen = new Set<string>();
+    const uniqueTicks: number[] = [];
     
-    if (daysDiff > 180) { // More than 6 months, show every other point
-      return Math.ceil(chartData.length / 4);
-    } else if (daysDiff > 60) { // More than 2 months, show most points
-      return Math.ceil(chartData.length / 6);
-    } else { // Less than 2 months, show all points
-      return 0;
-    }
+    chartData.forEach((item) => {
+      const label = formatXAxisDate(item.timestamp);
+      if (!seen.has(label)) {
+        seen.add(label);
+        uniqueTicks.push(item.timestamp);
+      }
+    });
+    
+    return uniqueTicks;
   };
 
   return (
@@ -116,6 +120,7 @@ const PerformanceTrendChart: React.FC<PerformanceTrendChartProps> = ({ data }) =
             type="number"
             scale="time"
             domain={['dataMin', 'dataMax']}
+            ticks={getUniqueTicks()}
             tickFormatter={formatXAxisDate}
             stroke="#6b7280"
             fontSize={12}
@@ -124,7 +129,6 @@ const PerformanceTrendChart: React.FC<PerformanceTrendChartProps> = ({ data }) =
             label={{ value: 'Date (Mon YY)', fontSize: '12px'}}
             textAnchor="middle"
             height={60}
-            interval={getTickInterval()}
             minTickGap={50}
           />
           <YAxis 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, 
@@ -11,53 +11,74 @@ import {
   CheckCircle,
   AlertCircle,
   Brain,
-  Star
+  Star,
+  Loader2
 } from 'lucide-react';
 import PerformanceTrendChart from './PerformanceTrendChart';
+import { dashboardAPI, DashboardData } from '../services/dashboardAPI';
+import { useAuth } from '../hooks/useAuth';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data - in real app this would come from API
-  const userStats = {
-    aptitudeScore: 81, // Latest aptitude test score
-    interviewScore: 76, // Latest interview score
-    overallPerformance: 78, // Average score across all tests
-    completedSessions: 6 // Total interviews + aptitude tests
-  };
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const data = await dashboardAPI.getDashboardStats();
+        setDashboardData(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError('Failed to load dashboard data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Performance trend data (same as in PerformanceTrendChart)
-  const performanceData = [
-    { date: '2025-01-08', overallScore: 75, sessionNumber: 1 },
-    { date: '2025-01-15', overallScore: 65, sessionNumber: 2 },
-    { date: '2025-01-18', overallScore: 88, sessionNumber: 3 },
-    { date: '2025-02-22', overallScore: 71, sessionNumber: 4 },
-    { date: '2025-03-25', overallScore: 54, sessionNumber: 5 },
-    { date: '2025-06-28', overallScore: 76, sessionNumber: 6 },
-    { date: '2025-07-01', overallScore: 78, sessionNumber: 7 },
-    { date: '2025-08-05', overallScore: 90, sessionNumber: 8 },
-  ];
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen pt-20 pb-12 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-black mx-auto mb-4" />
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !dashboardData) {
+    return (
+      <div className="min-h-screen pt-20 pb-12 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
+          <p className="text-gray-600 mb-4">{error || 'Failed to load dashboard data'}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-black text-white px-6 py-2 rounded-lg hover:bg-gray-800"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const { userStats, performanceData, mlEvaluation, recentActivities } = dashboardData;
 
   // Calculate performance stats
-  const lastScore = performanceData[performanceData.length - 1]?.overallScore || 0;
-  const previousScore = performanceData[performanceData.length - 2]?.overallScore || 0;
-  const highestScore = Math.max(...performanceData.map(d => d.overallScore));
+  const lastScore = performanceData.length > 0 ? performanceData[performanceData.length - 1]?.overallScore || 0 : 0;
+  const previousScore = performanceData.length > 1 ? performanceData[performanceData.length - 2]?.overallScore || 0 : 0;
+  const highestScore = performanceData.length > 0 ? Math.max(...performanceData.map(d => d.overallScore)) : 0;
   const scoreChange = lastScore - previousScore;
   const isImprovement = scoreChange > 0;
-
-  const mlEvaluation = {
-    overallScore: 76,
-    strengths: ['Technical Knowledge', 'Problem Solving', 'Communication'],
-    improvements: ['Confidence', 'Body Language', 'Clarity'],
-    feedback: "You showed strong technical skills but hesitated during behavioral questions. Practice speaking with more confidence."
-  };
-
-  const recentActivities = [
-    { date: 'Jan 28', activity: 'Mock Interview', score: 76, type: 'interview' },
-    { date: 'Jan 25', activity: 'Technical Quiz', score: 81, type: 'test' },
-    { date: 'Jan 22', activity: 'Mock Interview', score: 68, type: 'interview' },
-    { date: 'Jan 18', activity: 'Logic Test', score: 72, type: 'test' },
-  ];
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -71,7 +92,9 @@ const Dashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-black mb-2">Welcome back, Patel Nirmit!</h1>
+            <h1 className="text-3xl font-bold text-black mb-2">
+              Welcome back, {user?.name || 'User'}!
+            </h1>
             <p className="text-gray-600">Track your progress and improve your interview skills</p>
           </div>
 
@@ -142,40 +165,49 @@ const Dashboard: React.FC = () => {
                     Overall Score (Aptitude + Interview)
                   </div>
                 </div>
-                <PerformanceTrendChart data={performanceData} />
-                
-                {/* Performance Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-gray-200">
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold mb-1 ${getScoreColor(lastScore)}`}>
-                      {lastScore}%
+                {performanceData.length > 0 ? (
+                  <>
+                    <PerformanceTrendChart data={performanceData} />
+                    
+                    {/* Performance Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-gray-200">
+                      <div className="text-center">
+                        <div className={`text-2xl font-bold mb-1 ${getScoreColor(lastScore)}`}>
+                          {lastScore}%
+                        </div>
+                        <div className="text-sm text-gray-600">Last Recorded</div>
+                      </div>
+                      
+                      <div className="text-center">
+                        <div className={`text-2xl font-bold mb-1 ${getScoreColor(highestScore)}`}>
+                          {highestScore}%
+                        </div>
+                        <div className="text-sm text-gray-600">Highest Score</div>
+                      </div>
+                      
+                      <div className="text-center">
+                        <div className="flex items-center justify-center space-x-1 mb-1">
+                          <span className={`text-2xl font-bold ${isImprovement ? 'text-green-600' : scoreChange < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                            {isImprovement ? '+' : ''}{scoreChange}%
+                          </span>
+                          {scoreChange !== 0 && (
+                            <TrendingUp 
+                              className={`h-5 w-5 ${isImprovement ? 'text-green-600' : 'text-red-600 rotate-180'}`}
+                            />
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {scoreChange > 0 ? 'Improvement' : scoreChange < 0 ? 'Decrease' : 'No Change'}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-600">Last Recorded</div>
+                  </>
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <Brain className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No performance data yet. Complete your first assessment to see your progress!</p>
                   </div>
-                  
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold mb-1 ${getScoreColor(highestScore)}`}>
-                      {highestScore}%
-                    </div>
-                    <div className="text-sm text-gray-600">Highest Score</div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <div className="flex items-center justify-center space-x-1 mb-1">
-                      <span className={`text-2xl font-bold ${isImprovement ? 'text-green-600' : scoreChange < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                        {isImprovement ? '+' : ''}{scoreChange}%
-                      </span>
-                      {scoreChange !== 0 && (
-                        <TrendingUp 
-                          className={`h-5 w-5 ${isImprovement ? 'text-green-600' : 'text-red-600 rotate-180'}`}
-                        />
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {scoreChange > 0 ? 'Improvement' : scoreChange < 0 ? 'Decrease' : 'No Change'}
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* ML Evaluation Summary */}
@@ -199,11 +231,15 @@ const Dashboard: React.FC = () => {
                       Strengths
                     </h4>
                     <div className="space-y-2">
-                      {mlEvaluation.strengths.map((strength, index) => (
-                        <span key={index} className="inline-block bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs border border-green-200 mr-2 mb-2">
-                          {strength}
-                        </span>
-                      ))}
+                      {mlEvaluation.strengths.length > 0 ? (
+                        mlEvaluation.strengths.map((strength, index) => (
+                          <span key={index} className="inline-block bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs border border-green-200 mr-2 mb-2">
+                            {strength}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">Complete an assessment to discover your strengths</p>
+                      )}
                     </div>
                   </div>
                   
@@ -213,11 +249,15 @@ const Dashboard: React.FC = () => {
                       Areas to Improve
                     </h4>
                     <div className="space-y-2">
-                      {mlEvaluation.improvements.map((improvement, index) => (
-                        <span key={index} className="inline-block bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full text-xs border border-yellow-200 mr-2 mb-2">
-                          {improvement}
-                        </span>
-                      ))}
+                      {mlEvaluation.improvements.length > 0 ? (
+                        mlEvaluation.improvements.map((improvement, index) => (
+                          <span key={index} className="inline-block bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full text-xs border border-yellow-200 mr-2 mb-2">
+                            {improvement}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">Get feedback after your first assessment</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -271,34 +311,43 @@ const Dashboard: React.FC = () => {
                   <h2 className="text-xl font-bold">Recent Activity</h2>
                 </div>
 
-                <div className="space-y-4">
-                  {recentActivities.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 bg-gray-100 rounded-lg">
-                          {activity.type === 'interview' ? 
-                            <Video className="h-4 w-4 text-black" /> : 
-                            <FileText className="h-4 w-4 text-black" />
-                          }
+                {recentActivities.length > 0 ? (
+                  <>
+                    <div className="space-y-4">
+                      {recentActivities.map((activity, index) => (
+                        <div key={index} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-gray-100 rounded-lg">
+                              {activity.type === 'interview' ? 
+                                <Video className="h-4 w-4 text-black" /> : 
+                                <FileText className="h-4 w-4 text-black" />
+                              }
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-black">{activity.activity}</div>
+                              <div className="text-xs text-gray-500">{activity.date}</div>
+                            </div>
+                          </div>
+                          <div className={`text-sm font-semibold ${getScoreColor(activity.score)}`}>
+                            {activity.score}%
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-black">{activity.activity}</div>
-                          <div className="text-xs text-gray-500">{activity.date}</div>
-                        </div>
-                      </div>
-                      <div className={`text-sm font-semibold ${getScoreColor(activity.score)}`}>
-                        {activity.score}%
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                <button 
-                  onClick={() => navigate('/history')}
-                  className="w-full mt-4 text-center text-sm text-gray-600 hover:text-black transition-colors"
-                >
-                  View All Activity
-                </button>
+                    <button 
+                      onClick={() => navigate('/history')}
+                      className="w-full mt-4 text-center text-sm text-gray-600 hover:text-black transition-colors"
+                    >
+                      View All Activity
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No activity yet. Start your first assessment or interview!</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

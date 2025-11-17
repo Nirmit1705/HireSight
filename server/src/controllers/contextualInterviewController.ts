@@ -302,20 +302,20 @@ export class ContextualInterviewController {
       const conversationStats = await this.conversationService.getConversationStats(sessionId);
       const finalConversation = await this.conversationService.getConversation(sessionId);
 
-      // Calculate duration in minutes from conversation stats or estimate from session
+      // Calculate duration in seconds from conversation stats or estimate from session
       let duration = 0;
       if (conversationStats?.duration && conversationStats.duration > 0) {
-        // Convert milliseconds to minutes
-        duration = Math.round(conversationStats.duration / 60000);
+        // Convert milliseconds to seconds
+        duration = Math.round(conversationStats.duration / 1000);
       } else {
-        // Fallback: estimate based on number of questions (avg 2 min per question)
-        duration = Math.max(session.responses.length * 2, 1);
+        // Fallback: estimate based on number of questions (avg 2 min per question = 120 seconds)
+        duration = Math.max(session.responses.length * 120, 60);
       }
       
       console.log('Interview duration calculation:', {
         statsAvailable: !!conversationStats,
         statsDuration: conversationStats?.duration,
-        calculatedMinutes: duration
+        calculatedSeconds: duration
       });
 
       // Calculate scores (use provided scores or default to conversation quality metrics)
@@ -397,7 +397,7 @@ export class ContextualInterviewController {
 
 Interview Details:
 - Position: ${displayPosition}
-- Duration: ${duration} minutes
+- Duration: ${Math.round(duration / 60)} minutes ${duration % 60} seconds
 - Questions Answered: ${session.responses.length}
 
 Performance Scores:

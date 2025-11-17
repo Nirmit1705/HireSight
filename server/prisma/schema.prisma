@@ -125,6 +125,7 @@ model AptitudeTest {
   // Relations
   answers         AptitudeTestAnswer[]
   feedback        Feedback?
+  interviews      Interview[]  // Interviews that used this aptitude test
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -161,6 +162,10 @@ model Interview {
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   position    Position       // Position chosen for this interview (enum)
+  
+  // Link to aptitude test if user continued with previous scores
+  aptitudeTestId  String?
+  aptitudeTest    AptitudeTest?  @relation(fields: [aptitudeTestId], references: [id], onDelete: SetNull)
   
   // Interview execution
   startedAt   DateTime       @default(now())

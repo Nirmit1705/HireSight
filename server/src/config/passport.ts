@@ -40,7 +40,7 @@ passport.use(
           });
         }
 
-        const tokens = TokenUtils.generateTokenPair(user.id, user.email);
+        const tokens = TokenUtils.generateTokenPair(user.id, user.email, user.name);
         
         // Create a user object with tokens attached
         const userWithTokens = {

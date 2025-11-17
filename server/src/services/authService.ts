@@ -72,7 +72,7 @@ export class AuthService {
       });
 
       // Generate tokens
-      const tokens = TokenUtils.generateTokenPair(user.id, user.email);
+      const tokens = TokenUtils.generateTokenPair(user.id, user.email, user.name);
 
       // Store refresh token
       await prisma.refreshToken.create({
@@ -153,7 +153,7 @@ export class AuthService {
       }
 
       // Generate tokens
-      const tokens = TokenUtils.generateTokenPair(user.id, user.email);
+      const tokens = TokenUtils.generateTokenPair(user.id, user.email, user.name);
 
       // Store refresh token
       await prisma.refreshToken.create({
@@ -224,7 +224,7 @@ export class AuthService {
       }
 
       // Generate new tokens
-      const newTokens = TokenUtils.generateTokenPair(storedToken.user.id, storedToken.user.email);
+      const newTokens = TokenUtils.generateTokenPair(storedToken.user.id, storedToken.user.email, storedToken.user.name);
 
       // Update refresh token in database
       await prisma.refreshToken.update({

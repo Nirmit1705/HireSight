@@ -1,51 +1,96 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, Trophy, TrendingUp, Calendar, Target, BarChart3, Clock, Award } from 'lucide-react';
 import { PageType } from '../App';
 import RadarChart from './RadarChart';
+import { userProfileAPI, UserProfileData } from '../services/userProfileAPI';
 
 interface UserProfileProps {
   onNavigate: (page: PageType) => void;
 }
 
 const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
-  const userStats = {
-    totalInterviews: 15,
-    averageScore: 82,
-    improvementRate: 23,
-    timeSpent: 180, // minutes
-    bestScore: 95,
-    streak: 7
+  const [profileData, setProfileData] = useState<UserProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadProfileData();
+  }, []);
+
+  const loadProfileData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await userProfileAPI.getUserProfile();
+      setProfileData(data);
+    } catch (err: any) {
+      console.error('Error loading profile data:', err);
+      setError(err.response?.data?.message || 'Failed to load profile data');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const recentInterviews = [
-    { date: '2024-01-15', position: 'Frontend Developer', score: 85, domain: 'Technology' },
-    { date: '2024-01-10', position: 'Data Analyst', score: 78, domain: 'Finance' },
-    { date: '2024-01-05', position: 'Full Stack Developer', score: 82, domain: 'Technology' },
-    { date: '2024-01-01', position: 'Product Manager', score: 88, domain: 'Technology' },
-  ];
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen pt-20 pb-12">
+        <div className="container mx-auto px-6 pt-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading your profile...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const radarData = [
-    { label: 'Fluency', value: 82 },
-    { label: 'Grammar', value: 78 },
-    { label: 'Confidence', value: 75 },
-    { label: 'Technical Knowledge', value: 85 },
-    { label: 'Vocabulary', value: 80 }
-  ];
+  // Show error state
+  if (error || !profileData) {
+    return (
+      <div className="min-h-screen pt-20 pb-12">
+        <div className="container mx-auto px-6 pt-6">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-8 text-center">
+              <p className="text-red-600 mb-4">{error || 'Failed to load profile data'}</p>
+              <button
+                onClick={loadProfileData}
+                className="bg-black hover:bg-gray-800 text-white px-6 py-2 rounded-lg font-semibold transition-all duration-200"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const skillProgress = [
-    { skill: 'Fluency', current: 82, target: 90, change: +5 },
-    { skill: 'Grammar', current: 78, target: 85, change: +3 },
-    { skill: 'Confidence', current: 75, target: 85, change: +2 },
-    { skill: 'Technical Knowledge', current: 85, target: 92, change: +7 },
-    { skill: 'Vocabulary', current: 80, target: 88, change: +4 },
-  ];
+  const { userInfo, statistics, recentInterviews, skillProgress, radarData, achievements } = profileData;
 
-  const achievements = [
-    { title: 'First Interview', icon: Award, description: 'Completed your first interview', earned: true },
-    { title: 'High Scorer', icon: Trophy, description: 'Scored above 90% in an interview', earned: true },
-    { title: 'Consistent Performer', icon: TrendingUp, description: 'Maintained 80%+ average for 5 interviews', earned: true },
-    { title: 'Marathon Runner', icon: Clock, description: 'Spent 10+ hours practicing', earned: false },
-  ];
+  // Map icon types to actual icon components
+  const getAchievementIcon = (iconType: string) => {
+    switch (iconType) {
+      case 'award': return Award;
+      case 'trophy': return Trophy;
+      case 'trending': return TrendingUp;
+      case 'clock': return Clock;
+      default: return Award;
+    }
+  };
+
+  const userStats = {
+    totalInterviews: statistics.totalInterviews,
+    averageScore: statistics.averageScore,
+    improvementRate: statistics.improvementRate,
+    timeSpent: statistics.timeSpent,
+    bestScore: statistics.bestScore,
+    streak: statistics.streak
+  };
+
+  const recentInterviewsData = recentInterviews;
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -59,6 +104,64 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
     return 'bg-red-500';
   };
 
+  // Generate dynamic key insights based on skill values
+  const generateKeyInsights = () => {
+    if (radarData.length === 0) return ['Complete interviews to get personalized insights'];
+    
+    const insights: string[] = [];
+    
+    // Sort skills by value to identify strongest and weakest
+    const sortedSkills = [...radarData].sort((a, b) => b.value - a.value);
+    const strongest = sortedSkills.slice(0, 2);
+    const weakest = sortedSkills.slice(-2);
+    
+    // Insight about strongest skills
+    if (strongest[0].value > 0) {
+      const strongestNames = strongest.map(s => s.label).join(' and ');
+      insights.push(`Strongest in ${strongestNames}`);
+    }
+    
+    // Insight about skills that need improvement (below 75)
+    const needsImprovement = radarData.filter(s => s.value > 0 && s.value < 75);
+    if (needsImprovement.length > 0) {
+      needsImprovement.forEach(skill => {
+        insights.push(`${skill.label} shows room for improvement`);
+      });
+    }
+    
+    // Insight about skills that need focused practice (below 65)
+    const needsPractice = radarData.filter(s => s.value > 0 && s.value < 65);
+    if (needsPractice.length > 0 && needsPractice.length <= 2) {
+      needsPractice.forEach(skill => {
+        insights.push(`${skill.label} needs focused practice`);
+      });
+    }
+    
+    // Insight about above average skills (above 75)
+    const aboveAverage = radarData.filter(s => s.value >= 75 && s.value < 85);
+    if (aboveAverage.length > 0 && insights.length < 4) {
+      aboveAverage.forEach(skill => {
+        if (insights.length < 4) {
+          insights.push(`${skill.label} is above average and improving`);
+        }
+      });
+    }
+    
+    // Insight about excellent skills (above 85)
+    const excellent = radarData.filter(s => s.value >= 85);
+    if (excellent.length > 0 && insights.length < 4) {
+      excellent.forEach(skill => {
+        if (insights.length < 4) {
+          insights.push(`${skill.label} is excellent - keep it up!`);
+        }
+      });
+    }
+    
+    return insights.length > 0 ? insights : ['Continue practicing to improve your skills'];
+  };
+
+  const keyInsights = generateKeyInsights();
+
   return (
     <div className="min-h-screen pt-20 pb-12">
       <div className="container mx-auto px-6 pt-6">
@@ -70,8 +173,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
                 <User className="h-10 w-10 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold mb-2">Patel Nirmit</h1>
-                <p className="text-gray-600">Aspiring Software Developer</p>
+                <h1 className="text-3xl font-bold mb-2">{userInfo.name}</h1>
+                <p className="text-gray-600">
+                  {userInfo.currentPosition || 'Aspiring Professional'}
+                </p>
               </div>
             </div>
           </div>
@@ -113,7 +218,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
               </div>
               
               <div className="space-y-4">
-                {recentInterviews.map((interview, index) => (
+                {recentInterviewsData.map((interview, index) => (
                   <div key={index} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="font-semibold">{interview.position}</h3>
@@ -203,10 +308,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <h4 className="font-semibold text-black mb-2">Key Insights</h4>
                   <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• Strongest in Technical Knowledge and Fluency</li>
-                    <li>• Confidence shows room for improvement</li>
-                    <li>• Grammar needs focused practice</li>
-                    <li>• Vocabulary is above average and improving</li>
+                    {keyInsights.map((insight, index) => (
+                      <li key={index}>• {insight}</li>
+                    ))}
                   </ul>
                 </div>
               </div>
@@ -220,32 +324,35 @@ const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
               <h2 className="text-2xl font-bold">Achievements</h2>
             </div>
             
-            <div className="grid md:grid-cols-2 gap-6">
-              {achievements.map((achievement, index) => (
-                <div key={index} className={`border rounded-lg p-4 ${
-                  achievement.earned 
-                    ? 'border-black bg-gray-50' 
-                    : 'border-gray-200 bg-white'
-                }`}>
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${
-                      achievement.earned ? 'bg-black' : 'bg-gray-200'
-                    }`}>
-                      <achievement.icon className={`h-6 w-6 ${
-                        achievement.earned ? 'text-white' : 'text-gray-500'
-                      }`} />
-                    </div>
-                    <div>
-                      <h3 className={`font-semibold ${
-                        achievement.earned ? 'text-black' : 'text-gray-500'
+                          <div className="grid md:grid-cols-2 gap-6">
+              {achievements.map((achievement, index) => {
+                const IconComponent = getAchievementIcon(achievement.iconType);
+                return (
+                  <div key={index} className={`border rounded-lg p-4 ${
+                    achievement.earned 
+                      ? 'border-black bg-gray-50' 
+                      : 'border-gray-200 bg-white'
+                  }`}>
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-lg ${
+                        achievement.earned ? 'bg-black' : 'bg-gray-200'
                       }`}>
-                        {achievement.title}
-                      </h3>
-                      <p className="text-sm text-gray-600">{achievement.description}</p>
+                        <IconComponent className={`h-6 w-6 ${
+                          achievement.earned ? 'text-white' : 'text-gray-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <h3 className={`font-semibold ${
+                          achievement.earned ? 'text-black' : 'text-gray-500'
+                        }`}>
+                          {achievement.title}
+                        </h3>
+                        <p className="text-sm text-gray-600">{achievement.description}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

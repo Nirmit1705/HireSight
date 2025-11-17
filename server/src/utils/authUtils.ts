@@ -77,8 +77,8 @@ export class TokenUtils {
   /**
    * Generate both access and refresh tokens
    */
-  static generateTokenPair(userId: string, email: string): AuthTokens {
-    const accessToken = this.generateAccessToken({ userId, email });
+  static generateTokenPair(userId: string, email: string, name?: string | null): AuthTokens {
+    const accessToken = this.generateAccessToken({ userId, email, name });
     const refreshToken = this.generateRefreshToken();
 
     return {

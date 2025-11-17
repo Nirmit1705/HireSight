@@ -34,6 +34,7 @@ export interface SignInData {
 export interface JWTPayload {
   userId: string;
   email: string;
+  name?: string | null;
   iat?: number;
   exp?: number;
 }

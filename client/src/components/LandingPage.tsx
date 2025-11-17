@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, CheckCircle, FileText, Video, BarChart3, Star, Users, Target } from 'lucide-react';
 import { PageType } from '../App';
 import AuthModal from './AuthModal';
@@ -8,9 +8,20 @@ interface LandingPageProps {
   onLogin: () => void;
 }
 
+interface Point {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  z: number;
+}
+
 const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onLogin }) => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pointsRef = useRef<Point[]>([]);
+  const animationFrameRef = useRef<number>();
 
   const handleAuthClick = (mode: 'signin' | 'signup') => {
     setAuthMode(mode);
@@ -22,11 +33,116 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onLogin }) => {
     onLogin();
   };
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Initialize points with depth (z-axis for perspective)
+    const numPoints = 120; // Increased for better coverage
+    const points: Point[] = [];
+    
+    for (let i = 0; i < numPoints; i++) {
+      points.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        z: Math.random() // 0 = far (light), 1 = near (dark)
+      });
+    }
+    
+    pointsRef.current = points;
+
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Update points
+      points.forEach(point => {
+        point.x += point.vx;
+        point.y += point.vy;
+        
+        // Bounce off edges
+        if (point.x < 0 || point.x > canvas.width) point.vx *= -1;
+        if (point.y < 0 || point.y > canvas.height) point.vy *= -1;
+      });
+
+      // Draw connections
+      const maxDistance = 150; // Connection threshold
+      
+      for (let i = 0; i < points.length; i++) {
+        for (let j = i + 1; j < points.length; j++) {
+          const dx = points[i].x - points[j].x;
+          const dy = points[i].y - points[j].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < maxDistance) {
+            // Calculate average depth for the line
+            const avgZ = (points[i].z + points[j].z) / 2;
+            
+            // Opacity based on distance
+            const opacity = (1 - distance / maxDistance) * 0.3;
+            
+            // Color based on depth: farther = lighter (gray), nearer = darker (black)
+            // avgZ: 0 = far (light gray), 1 = near (black)
+            const grayValue = Math.floor(200 - (avgZ * 150)); // Range: 200 (light) to 50 (dark)
+            
+            ctx.strokeStyle = `rgba(${grayValue}, ${grayValue}, ${grayValue}, ${opacity})`;
+            ctx.lineWidth = 0.5 + avgZ * 1; // Thicker lines for nearer points
+            
+            ctx.beginPath();
+            ctx.moveTo(points[i].x, points[i].y);
+            ctx.lineTo(points[j].x, points[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Draw points
+      points.forEach(point => {
+        const grayValue = Math.floor(180 - (point.z * 130));
+        const size = 1 + point.z * 2;
+        
+        ctx.fillStyle = `rgba(${grayValue}, ${grayValue}, ${grayValue}, 0.6)`;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-white text-black">
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 pt-16 sm:pt-20">
-        <div className="container mx-auto max-w-4xl">
+      <section className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 pt-16 sm:pt-20 overflow-hidden">
+        {/* Animated Canvas Background */}
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full"
+          style={{ zIndex: 0 }}
+        />
+        <div className="container mx-auto max-w-4xl relative z-10">
           <div className="text-center space-y-8 sm:space-y-12">
             {/* Logo/Brand Mark */}
             <div className="mb-12 sm:mb-20">

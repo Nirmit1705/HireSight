@@ -25,6 +25,7 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
   const [responses, setResponses] = useState<string[]>([]);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingTipIndex, setLoadingTipIndex] = useState(0);
   const [isProcessingResponse, setIsProcessingResponse] = useState(false);
@@ -592,6 +593,44 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
 
   const confirmEndInterview = async () => {
     try {
+      console.log('⚡ confirmEndInterview called');
+      console.log('⚡ isAiMode:', isAiMode);
+      console.log('⚡ aiSessionId:', aiSessionId);
+      console.log('⚡ Should use handleComplete?', isAiMode && aiSessionId);
+      
+      // Prevent double-clicking
+      if (isEnding) {
+        console.log('⚠️ Already ending interview, ignoring duplicate click');
+        return;
+      }
+      
+      // Immediately show completion screen and stop everything
+      setIsEnding(true);
+      setIsCompleted(true);  // Show loading/completion screen immediately
+      setShowEndInterviewModal(false);
+      
+      // Stop any ongoing recording
+      if (isSpeechRecording) {
+        stopSpeechRecording();
+      }
+      if (isTTSPlaying) {
+        stopTTS();
+      }
+      
+      // Clear any timers
+      if (userVideoStream) {
+        userVideoStream.getTracks().forEach(track => track.stop());
+      }
+      
+      // If it's an AI interview, use the handleComplete flow instead
+      if (isAiMode && aiSessionId) {
+        console.log('🎯 AI interview detected, using handleComplete instead of old endInterview');
+        await handleComplete();
+        return;
+      }
+      
+      console.log('⚠️ Using OLD interview flow (not AI mode)');
+      
       // Stop any ongoing recording
       if (isSpeechRecording) {
         stopSpeechRecording();
@@ -674,6 +713,7 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
       }
     } catch (error) {
       console.error('Error ending interview:', error);
+      setIsEnding(false);
       // Fallback navigation in case of error
       onNavigate('dashboard');
     }
@@ -716,39 +756,104 @@ const LiveInterview: React.FC<LiveInterviewProps> = ({
     }
   };
 
-  const handleComplete = () => {
-    const score = Math.floor(Math.random() * 30) + 70;
-    setInterviewScore(score);
-    
-    // Get the actual questions that were asked
-    const actualQuestions = isAiMode && aiQuestions.length > 0 
-      ? aiQuestions.map(q => q.text)
-      : questions;
-    
-    const newHistoryItem = {
-      id: Date.now().toString(),
-      type: 'interview' as const,
-      date: new Date().toISOString().split('T')[0],
-      score: score,
-      duration: formatTime(timeElapsed),
-      status: 'completed' as const,
-      responses: responses.filter(response => response.trim() !== ''),
-      questions: actualQuestions,
-      isAiMode: isAiMode || false,
-      domain: isAiMode && resumeAnalysis ? resumeAnalysis.domain : undefined
-    };
+  const handleComplete = async () => {
+    try {
+      // If it's AI mode with a session, complete the interview via API
+      if (isAiMode && aiSessionId) {
+        // Note: isCompleted is already set to true in confirmEndInterview
+        // This ensures the loading screen is shown immediately
+        
+        console.log('=== INTERVIEW COMPLETION STARTED ===');
+        console.log('Session ID:', aiSessionId);
+        console.log('Current confidence metrics:', currentConfidenceMetrics);
+        
+        // Collect all the actual scores from the interview
+        // Map the available confidence metrics to interview score parameters
+        const scores = {
+          fluencyScore: currentConfidenceMetrics?.fluencyScore ?? 0,
+          grammarScore: currentConfidenceMetrics?.pauseScore ?? 0, // Use pause score as proxy for grammar
+          confidenceScore: currentConfidenceMetrics?.overallScore ?? 0,
+          technicalKnowledgeScore: currentConfidenceMetrics?.technicalScore ?? 0,
+          vocabularyScore: currentConfidenceMetrics?.vocabularyScore ?? 0,
+          analyticalThinkingScore: currentConfidenceMetrics?.fillerWordScore ?? 0, // Use filler word score (inverse) as proxy
+          overallScore: currentConfidenceMetrics?.overallScore ?? 0
+        };
+        
+        console.log('📊 Scores being sent to backend:', scores);
+        console.log('📈 Overall score from metrics:', currentConfidenceMetrics?.overallScore);
+        
+        // Call backend to complete interview and save to database with actual scores
+        const completionResult = await aiInterviewAPI.completeContextualInterview(aiSessionId, scores);
+        console.log('✅ Backend response:', completionResult);
+        console.log('📊 Backend returned scores:', completionResult.summary?.scores);
+        
+        // IMPORTANT: Use the ACTUAL score that was displayed during interview (from frontend metrics)
+        // NOT the score from backend which might recalculate
+        const score = scores.overallScore;
+        console.log('🎯 Final score to display:', score);
+        console.log('📊 Feedback data from backend:', completionResult.feedback);
+        console.log('=== INTERVIEW COMPLETION FINISHED ===');
+        
+        setInterviewScore(score);
+        setIsCompleted(true);
+        
+        // Navigate to feedback page with feedback data if available
+        if (completionResult.feedback) {
+          console.log('✅ Navigating to feedback page with structured feedback');
+          onNavigate('feedback', undefined, completionResult.feedback);
+        } else {
+          // Show completion message and navigate to history
+          alert(`Interview completed! Your overall score: ${score}%\n\nRedirecting to history page...`);
+          onNavigate('history');
+        }
+      } else {
+        // For non-AI interviews, use the old logic (can be updated later)
+        const score = Math.floor(Math.random() * 30) + 70;
+        setInterviewScore(score);
+        
+        // Get the actual questions that were asked
+        const actualQuestions = aiQuestions.length > 0 
+          ? aiQuestions.map(q => q.text)
+          : questions;
+        
+        // Save to localStorage (legacy - can be removed once all interviews use backend)
+        const newHistoryItem = {
+          id: Date.now().toString(),
+          type: 'interview' as const,
+          date: new Date().toISOString().split('T')[0],
+          score: score,
+          duration: formatTime(timeElapsed),
+          status: 'completed' as const,
+          responses: responses.filter(response => response.trim() !== ''),
+          questions: actualQuestions,
+          isAiMode: isAiMode || false,
+          domain: isAiMode && resumeAnalysis ? resumeAnalysis.domain : undefined
+        };
 
-    const savedHistory = localStorage.getItem('hiresight_history');
-    const historyItems = savedHistory ? JSON.parse(savedHistory) : [];
-    historyItems.unshift(newHistoryItem);
-    localStorage.setItem('hiresight_history', JSON.stringify(historyItems));
-    
-    setIsCompleted(true);
-    
-    // Navigate to feedback page after 2 seconds
-    setTimeout(() => {
-      onNavigate('feedback');
-    }, 2000);
+        const savedHistory = localStorage.getItem('hiresight_history');
+        const historyItems = savedHistory ? JSON.parse(savedHistory) : [];
+        historyItems.unshift(newHistoryItem);
+        localStorage.setItem('hiresight_history', JSON.stringify(historyItems));
+        
+        setIsCompleted(true);
+        
+        // Navigate to feedback page after 2 seconds
+        setTimeout(() => {
+          onNavigate('feedback');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error completing interview:', error);
+      setIsEnding(false);
+      // Fallback to showing completion even if API fails
+      const score = Math.floor(Math.random() * 30) + 70;
+      setInterviewScore(score);
+      setIsCompleted(true);
+      
+      setTimeout(() => {
+        onNavigate('feedback');
+      }, 2000);
+    }
   };
 
   const requestCameraPermission = async () => {

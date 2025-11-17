@@ -18,6 +18,7 @@ export interface InterviewSession {
   currentQuestionIndex: number;
   responses: string[];
   resumeAnalysis?: ResumeAnalysis;
+  position?: string; // Manual selection position
   conversationHistory: Array<{
     question: string;
     response: string;
@@ -26,6 +27,7 @@ export interface InterviewSession {
   totalQuestionCount: number;
   isComplete: boolean;
   randomSeed?: number; // Add seed for consistent randomization within session
+  interviewMode?: 'resume' | 'manual'; // Track interview mode
 }
 
 export class ContextualAIQuestionService {
@@ -62,10 +64,17 @@ export class ContextualAIQuestionService {
     return this.sessions.has(sessionId);
   }
 
-  async createInterviewSession(sessionId: string, resumeAnalysis: ResumeAnalysis): Promise<InterviewSession> {
+  async createInterviewSession(
+    sessionId: string, 
+    resumeAnalysis: ResumeAnalysis, 
+    interviewMode: 'resume' | 'manual' = 'resume',
+    position?: string  // Optional position for manual mode
+  ): Promise<InterviewSession> {
     try {
       console.log('=== CREATING CONTEXTUAL INTERVIEW SESSION ===');
       console.log('📝 Session ID:', sessionId);
+      console.log('🎯 Interview Mode:', interviewMode);
+      console.log('📋 Position:', position);
       console.log('📊 Current sessions before creation:', this.sessions.size);
       
       // Check if session already exists
@@ -94,20 +103,31 @@ export class ContextualAIQuestionService {
         resumeAnalysis.domain || 'Software Engineering'
       );
 
-      // Calculate dynamic question count based on resume complexity and desired thoroughness
-      const baseQuestions = 12; // Increased base for more comprehensive interviews
-      const projectBonus = Math.min(resumeAnalysis.projects?.length || 0, 4);
-      const experienceBonus = resumeAnalysis.workExperience?.length > 0 ? 3 : 0;
-      const skillBonus = Math.min(Math.floor(resumeAnalysis.skills.length / 3), 4);
+      // Calculate dynamic question count based on mode and resume complexity
+      let baseQuestions, projectBonus, experienceBonus, skillBonus;
+      
+      if (interviewMode === 'manual') {
+        // For manual mode, use a standard question set
+        baseQuestions = 10;
+        projectBonus = 0;
+        experienceBonus = 0;
+        skillBonus = 0;
+      } else {
+        // For resume mode, calculate based on resume content
+        baseQuestions = 12;
+        projectBonus = Math.min(resumeAnalysis.projects?.length || 0, 4);
+        experienceBonus = resumeAnalysis.workExperience?.length > 0 ? 3 : 0;
+        skillBonus = Math.min(Math.floor(resumeAnalysis.skills.length / 3), 4);
+      }
       
       let totalQuestionCount = baseQuestions + projectBonus + experienceBonus + skillBonus;
-      totalQuestionCount = Math.max(totalQuestionCount, 12); // Minimum 12 questions for thoroughness
+      totalQuestionCount = Math.max(totalQuestionCount, 10); // Minimum 10 questions
       totalQuestionCount = Math.min(totalQuestionCount, 20); // Maximum 20 to avoid fatigue
       
-      console.log(`📊 Dynamic question calculation: Base=${baseQuestions}, Projects=${projectBonus}, Experience=${experienceBonus}, Skills=${skillBonus} → Total=${totalQuestionCount}`);
+      console.log(`📊 Dynamic question calculation (${interviewMode} mode): Base=${baseQuestions}, Projects=${projectBonus}, Experience=${experienceBonus}, Skills=${skillBonus} → Total=${totalQuestionCount}`);
 
       // Generate the first question with context
-      const firstQuestion = await this.generateContextualQuestion(sessionId, resumeAnalysis, [], 0, totalQuestionCount);
+      const firstQuestion = await this.generateContextualQuestion(sessionId, resumeAnalysis, [], 0, totalQuestionCount, interviewMode);
       
       // Store the first question in conversation
       await this.conversationService.addMessage(sessionId, {
@@ -124,10 +144,12 @@ export class ContextualAIQuestionService {
         currentQuestionIndex: 0,
         responses: [],
         resumeAnalysis,
+        position,  // Store manual mode position
         conversationHistory: [],
         totalQuestionCount,
         isComplete: false,
-        randomSeed: Math.floor(Math.random() * 10000) // Generate unique seed per session
+        randomSeed: Math.floor(Math.random() * 10000), // Generate unique seed per session
+        interviewMode
       };
 
       this.sessions.set(sessionId, session);
@@ -232,7 +254,8 @@ export class ContextualAIQuestionService {
           session.resumeAnalysis!,
           session.questions,
           nextQuestionNumber,
-          session.totalQuestionCount
+          session.totalQuestionCount,
+          session.interviewMode || 'resume'
         );
 
         // Generate a brief human acknowledgment of the previous answer
@@ -282,12 +305,19 @@ export class ContextualAIQuestionService {
     analysis: ResumeAnalysis, 
     previousQuestions: AIQuestion[], 
     questionNumber: number,
-    totalQuestions: number
+    totalQuestions: number,
+    interviewMode: 'resume' | 'manual' = 'resume'
   ): Promise<AIQuestion> {
     try {
       // Get conversation context
       const conversationContext = await this.conversationService.getConversationContextForAI(sessionId);
       const context = await this.conversationService.getContext(sessionId);
+      
+      // Log resume data to verify it's available
+      console.log(`📋 Resume data check for question ${questionNumber + 1} (${interviewMode} mode):`);
+      console.log(`   - Projects: ${analysis.projects?.length || 0} (${analysis.projects?.slice(0, 2).join(', ') || 'none'})`);
+      console.log(`   - Skills: ${analysis.skills?.length || 0} (${analysis.skills?.slice(0, 3).join(', ') || 'none'})`);
+      console.log(`   - Work Experience: ${analysis.workExperience?.length || 0}`);
       
       // Determine question focus based on conversation flow
       const questionFocus = this.determineQuestionFocusWithContext(
@@ -295,7 +325,8 @@ export class ContextualAIQuestionService {
         questionNumber,
         analysis,
         previousQuestions,
-        context
+        context,
+        interviewMode
       );
 
       const prompt = this.createContextualPrompt(
@@ -303,7 +334,8 @@ export class ContextualAIQuestionService {
         analysis,
         conversationContext,
         questionNumber,
-        totalQuestions
+        totalQuestions,
+        interviewMode
       );
 
       console.log(`Generating contextual question ${questionNumber + 1}/${totalQuestions}...`);
@@ -315,10 +347,12 @@ export class ContextualAIQuestionService {
       
       if (questions.length > 0) {
         questions[0].id = `q-${sessionId}-${questionNumber + 1}`;
-        console.log(`Successfully generated contextual question: ${questions[0].text.substring(0, 100)}...`);
+        console.log(`✅ Generated question: ${questions[0].text.substring(0, 100)}...`);
+        console.log(`   Word count: ${questions[0].text.split(' ').length} words`);
         return questions[0];
       } else {
         // Fallback to non-contextual question
+        console.log('⚠️ AI generated no question, using fallback');
         return this.createFallbackQuestion(questionFocus, analysis, questionNumber);
       }
     } catch (error: any) {
@@ -471,7 +505,7 @@ export class ContextualAIQuestionService {
       const responseAnalysis = this.analyzeResponseDepth(userResponse, lastInterviewerMessage?.questionType);
       const followUpType = this.determineFollowUpType(responseAnalysis, lastInterviewerMessage?.questionType);
       
-      const prompt = `You are a professional, conversational interviewer conducting a contextual follow-up. 
+      const prompt = `You are a friendly interviewer in a natural conversation. Generate a brief follow-up based on the candidate's response.
 
 Current Conversation Context:
 ${conversationContext}
@@ -487,20 +521,32 @@ Response Analysis:
 
 Follow-up Type Needed: ${followUpType}
 
-Based on this analysis, generate a natural follow-up that ${this.getFollowUpObjective(followUpType)}.
+Generate a natural follow-up that ${this.getFollowUpObjective(followUpType)}.
+
+CRITICAL: Keep the follow-up question 25-30 words. Sound casual and conversational, not formal or exam-like.
 
 Generate a JSON response with exactly this format:
 {
-  "humanResponse": "A brief, natural acknowledgment that shows you're listening (like 'That's interesting', 'I see', 'Good point', 'Tell me more about that', etc.)",
+  "humanResponse": "A brief, natural acknowledgment (3-6 words like 'That's interesting', 'I see', 'Good point')",
   "followUpQuestion": {
-    "text": "A natural follow-up question based on the follow-up type needed",
+    "text": "A natural follow-up question (25-30 words)",
     "category": "follow-up",
     "difficulty": "medium",
     "isFollowUp": true
   }
 }
 
-Make the conversation feel natural and build on what they just said. Don't ask generic questions - be specific to their response.`;
+Examples of GOOD follow-ups:
+- "Can you give me a specific example of when you faced that challenge and walk me through your approach?"
+- "That's interesting. How did you solve that particular challenge? What steps did you take?"
+- "What was the outcome of that decision? Did it meet your expectations?"
+- "Tell me more about that. What made you choose that particular approach?"
+
+Examples of BAD (too formal) follow-ups to AVOID:
+- "Could you elaborate on the implementation details and architectural decisions you made?"
+- "What were all the technical specifications and requirements you had to consider?"
+
+Keep it conversational but complete!`;
 
       const response = await this.queryOllamaWithTimeout(prompt, 20000);
       const parsed = this.parseFollowUpResponse(response);
@@ -592,24 +638,24 @@ Make the conversation feel natural and build on what they just said. Don't ask g
     humanResponse: string;
   } {
     const fallbackQuestions: { [key: string]: string } = {
-      expansion: "Can you tell me more about that?",
-      clarification: "What specifically do you mean by that?",
-      example_request: "Can you give me a specific example?",
-      outcome_exploration: "What was the outcome of that situation?",
-      technical_deep_dive: "How did you approach that technically?",
-      challenge_exploration: "What challenges did you face with that?",
+      expansion: "Tell me more about that.",
+      clarification: "What do you mean by that?",
+      example_request: "Can you give me an example?",
+      outcome_exploration: "What was the outcome?",
+      technical_deep_dive: "How did you implement that?",
+      challenge_exploration: "What challenges did you face?",
       impact_measurement: "What impact did that have?",
-      learning_exploration: "What did you learn from that experience?"
+      learning_exploration: "What did you learn?"
     };
 
     const fallbackResponses = [
-      "That's interesting.", "I see.", "Tell me more about that.", "I'd like to understand that better."
+      "Interesting.", "I see.", "Got it.", "Makes sense."
     ];
 
     return {
       question: {
         id: `fallback-followup-${Date.now()}`,
-        text: fallbackQuestions[followUpType] || "Can you elaborate on that?",
+        text: fallbackQuestions[followUpType] || "Can you elaborate?",
         category: 'follow-up',
         difficulty: 'medium',
         isFollowUp: true
@@ -678,7 +724,8 @@ Response:`;
     analysis: ResumeAnalysis,
     conversationContext: string,
     questionNumber: number,
-    totalQuestions: number
+    totalQuestions: number,
+    interviewMode: 'resume' | 'manual' = 'resume'
   ): string {
     
     // Special handling for introduction questions
@@ -686,23 +733,23 @@ Response:`;
       if (questionNumber === 0) {
         return `You are a professional, friendly interviewer conducting a ${analysis.domain} interview. 
 
-Generate the FIRST question of the interview. This must be a warm, welcoming introduction question to make the candidate comfortable.
+Generate the FIRST question of the interview. This MUST ask the candidate to introduce themselves and tell you about their background.
 
-Background: The candidate has skills in ${analysis.skills?.slice(0, 3).join(', ')} and experience in ${analysis.domain}.
+Background: The candidate ${interviewMode === 'resume' ? `has skills in ${analysis.skills?.slice(0, 3).join(', ')} and` : 'is interviewing for a position in'} ${analysis.domain}.
 
 Generate a JSON response with this exact format:
 {
-  "text": "Your warm, introductory question that welcomes the candidate and asks them to introduce themselves or tell you about their background",
+  "text": "Your warm, introductory question asking the candidate to introduce themselves (25-35 words)",
   "category": "introduction",
   "difficulty": "easy"
 }
 
-Examples of good introduction questions:
-- "Welcome! Thank you for taking the time to interview with us today. Could you start by telling me a bit about yourself and your background in [relevant field]?"
-- "Hi there! I'm excited to learn more about you. Could you walk me through your journey and what brought you to [field]?"
-- "Thanks for joining us today! I'd love to start by hearing about your experience and what you're passionate about in [field]."
+Examples of good introduction questions that ask for self-introduction:
+- "Thanks for joining! To start, could you please introduce yourself and tell me about your background and experience in ${analysis.domain}?"
+- "Welcome! I'd love to hear about you. Could you introduce yourself and walk me through your journey in ${analysis.domain}?"
+- "Hi! Let's begin - please introduce yourself and tell me about your background, what you've been working on, and what interests you most."
 
-Make it sound natural and welcoming.`;
+CRITICAL: The question MUST ask the candidate to introduce themselves or tell about themselves. Aim for 25-35 words.`;
       } else {
         return `You are a professional interviewer. Continue the conversation naturally.
 
@@ -712,13 +759,13 @@ Generate a follow-up introduction question (${questionNumber + 1}/${totalQuestio
 
 Requirements:
 - Ask about their background, motivations, or career journey
-- Keep it conversational and comfortable
+- Keep it conversational and comfortable (25-35 words)
 - Build on what they might have shared previously
 - Focus on: ${questionFocus.focusArea}
 
 Generate a JSON response with this exact format:
 {
-  "text": "Your natural follow-up question about their background or career journey",
+  "text": "Your natural follow-up question (25-35 words)",
   "category": "introduction",
   "difficulty": "easy"
 }`;
@@ -726,31 +773,93 @@ Generate a JSON response with this exact format:
     }
 
     // For non-introduction questions
-    return `You are a professional, conversational interviewer conducting a ${analysis.domain} interview. Be natural and human-like, not robotic.
+    // Extract resume-specific details for context
+    const resumeProjects = analysis.projects?.slice(0, 3).join(', ') || 'their projects';
+    const resumeSkills = analysis.skills?.slice(0, 5).join(', ') || 'their skills';
+    const resumeExperience = analysis.workExperience?.slice(0, 2).join(', ') || 'their experience';
+    const hasProjects = analysis.projects && analysis.projects.length > 0;
+    const hasWorkExp = analysis.workExperience && analysis.workExperience.length > 0;
+    
+    // Different prompts for resume vs manual mode
+    if (interviewMode === 'manual') {
+      return `You are a friendly interviewer having a natural conversation with a candidate for a ${analysis.domain} position. This is a REAL interview, not an exam or viva.
 
 ${conversationContext}
 
-Generate the next question (${questionNumber + 1}/${totalQuestions}) focusing on: ${questionFocus.category}
+Generate question ${questionNumber + 1}/${totalQuestions} focusing on: ${questionFocus.category}
 
-Requirements:
-- Be conversational and natural, like a real human interviewer
-- Consider the conversation flow and previous responses
-- Don't repeat topics already covered thoroughly
-- Make questions relevant to their background: ${analysis.skills?.slice(0, 3).join(', ')}
+CRITICAL Requirements:
+- Length: 30-40 words (complete, natural sentences)
+- Sound like a casual, friendly conversation, NOT a formal examination
+- Ask general questions about ${analysis.domain} experience and skills
+- For ${questionFocus.category} questions:
+  * technical: "Tell me about your experience with [common ${analysis.domain} technology]"
+  * behavioral: "How do you handle [common ${analysis.domain} situation]?"
+  * problem-solving: "Walk me through how you'd approach [common ${analysis.domain} problem]"
+- Keep it casual and conversational - imagine you're chatting over coffee
 - Focus on: ${questionFocus.focusArea || questionFocus.category}
 - Difficulty: ${questionFocus.difficulty || 'medium'}
-- For technical questions: Focus on practical application, not just theory
-- For behavioral questions: Ask for specific examples and situations
-- For project questions: Ask about challenges, decisions, and learnings
 
 Generate a JSON response with this exact format:
 {
-  "text": "Your natural, conversational interview question",
+  "text": "Your conversational interview question (30-40 words)",
   "category": "${questionFocus.category}",
   "difficulty": "${questionFocus.difficulty || 'medium'}"
 }
 
-Make it sound like a real human conversation, not a formal assessment.`;
+Examples of GOOD general interview questions:
+- "Tell me about your experience with modern web frameworks. Which ones have you worked with?"
+- "How do you typically approach debugging a complex issue in production?"
+- "Describe a challenging project you worked on recently. What made it challenging?"
+
+Keep it conversational and focused on ${analysis.domain}!`;
+    }
+    
+    // Resume mode - use specific resume details
+    return `You are a friendly interviewer having a natural conversation with a candidate for a ${analysis.domain} position. This is a REAL interview, not an exam or viva.
+
+${conversationContext}
+
+Candidate's Resume Details:
+- Projects: ${resumeProjects}
+- Skills: ${resumeSkills}
+- Experience: ${resumeExperience}
+- Domain: ${analysis.domain}
+
+Generate question ${questionNumber + 1}/${totalQuestions} focusing on: ${questionFocus.category}
+
+CRITICAL Requirements:
+- Length: 30-40 words (complete, natural sentences)
+- Sound like a casual, friendly conversation, NOT a formal examination
+- MUST reference SPECIFIC items from their resume (use actual project names, company names, skills)
+- For ${questionFocus.category} questions:
+  * technical: "I see you've worked with ${resumeSkills}. Can you tell me about how you used [specific skill] in ${analysis.projects?.[0] || 'your project'}?"
+  * project-specific: ${hasProjects ? `MUST ask specifically about "${analysis.projects?.[0]}" - ask about their role, challenges, or implementation details` : 'Ask about a specific project they worked on'}
+  * behavioral: "Tell me about a time when you had to [situation]. How did you handle it at ${analysis.workExperience?.[0] || 'your company'}?"
+  * experience: "What were your main responsibilities when you worked as ${analysis.workExperience?.[0] || 'in your previous role'}?"
+- Keep it casual and conversational - imagine you're chatting over coffee
+- Focus on: ${questionFocus.focusArea || questionFocus.category}
+- Difficulty: ${questionFocus.difficulty || 'medium'}
+
+Generate a JSON response with this exact format:
+{
+  "text": "Your conversational interview question with specific resume references (30-40 words)",
+  "category": "${questionFocus.category}",
+  "difficulty": "${questionFocus.difficulty || 'medium'}"
+}
+
+Examples of GOOD interview questions (notice specific references):
+- "Tell me about ${analysis.projects?.[0] || 'your recent project'}. What was your role and what challenges did you face during development?"
+- "I noticed you worked with ${analysis.skills?.[0] || 'React'} in ${analysis.projects?.[0] || 'your project'}. Can you walk me through how you implemented a key feature?"
+- "How did you collaborate with your team when you were working at ${analysis.workExperience?.[0] || 'your previous company'}?"
+- "What was the most challenging technical problem you solved in ${analysis.projects?.[0] || 'your recent project'}?"
+
+Examples of BAD (viva-like) questions to AVOID:
+- "Explain the concept of dependency injection and its advantages in detail."
+- "What are all the differences between REST and GraphQL APIs?"
+- "Define polymorphism and provide three examples of its implementation."
+
+Remember: Use SPECIFIC names from their resume (projects: ${resumeProjects}, skills: ${resumeSkills})!`;
   }
 
   private determineQuestionFocusWithContext(
@@ -758,7 +867,8 @@ Make it sound like a real human conversation, not a formal assessment.`;
     questionNumber: number,
     analysis: ResumeAnalysis,
     previousQuestions: AIQuestion[],
-    context: InterviewContext | null
+    context: InterviewContext | null,
+    interviewMode: 'resume' | 'manual' = 'resume'
   ) {
     // Consider conversation context and what's been covered
     const coveredCategories = previousQuestions.map(q => q.category);
@@ -783,25 +893,25 @@ Make it sound like a real human conversation, not a formal assessment.`;
       availableCategories = [
         { category: 'introduction', difficulty: 'easy', focusArea: 'background and experience overview', priority: 3 },
         { category: 'experience', difficulty: 'easy', focusArea: 'recent work history', priority: 2 },
-        { category: 'motivation', difficulty: 'easy', focusArea: 'interest in role and company', priority: 2 },
-        { category: 'technical', difficulty: 'easy', focusArea: 'fundamental technical skills', priority: 1 }
+        { category: 'project-specific', difficulty: 'easy', focusArea: 'overview of resume projects', priority: 2 }, // Add project focus early
+        { category: 'motivation', difficulty: 'easy', focusArea: 'interest in role and company', priority: 1 }
       ];
     } else if (progress < 0.6) {
       // Mid questions (30-60%) - Dive deeper into expertise and projects
       availableCategories = [
-        { category: 'project-specific', difficulty: 'medium', focusArea: 'detailed project discussion', priority: 3 },
-        { category: 'technical', difficulty: 'medium', focusArea: 'technical problem-solving', priority: 3 },
-        { category: 'problem-solving', difficulty: 'medium', focusArea: 'analytical and critical thinking', priority: 2 },
-        { category: 'experience', difficulty: 'medium', focusArea: 'challenging work situations', priority: 1 }
+        { category: 'project-specific', difficulty: 'medium', focusArea: 'detailed project discussion from resume', priority: 4 }, // Increased priority
+        { category: 'technical', difficulty: 'medium', focusArea: 'specific skills from resume', priority: 3 },
+        { category: 'problem-solving', difficulty: 'medium', focusArea: 'challenges in resume projects', priority: 2 },
+        { category: 'experience', difficulty: 'medium', focusArea: 'work experience from resume', priority: 2 }
       ];
     } else if (progress < 0.8) {
       // Later questions (60-80%) - Assess soft skills and cultural fit
       availableCategories = [
         { category: 'behavioral', difficulty: 'medium', focusArea: 'soft skills and teamwork', priority: 3 },
+        { category: 'project-specific', difficulty: 'medium', focusArea: 'lessons from resume projects', priority: 2 }, // Keep project focus
         { category: 'situational', difficulty: 'medium', focusArea: 'hypothetical scenarios', priority: 2 },
-        { category: 'technical', difficulty: 'hard', focusArea: 'advanced technical concepts', priority: 2 },
-        { category: 'collaboration', difficulty: 'medium', focusArea: 'teamwork and communication', priority: 2 },
-        { category: 'leadership', difficulty: 'medium', focusArea: 'leadership and mentoring experience', priority: 1 }
+        { category: 'technical', difficulty: 'hard', focusArea: 'advanced concepts in resume skills', priority: 2 },
+        { category: 'collaboration', difficulty: 'medium', focusArea: 'teamwork and communication', priority: 1 }
       ];
     } else {
       // Final questions (80%+) - Future focus and wrap-up
@@ -901,7 +1011,7 @@ Make it sound like a real human conversation, not a formal assessment.`;
             temperature: 0.7,
             top_p: 0.9,
             top_k: 40,
-            num_predict: 200, // Limit response length for faster generation
+            num_predict: 150, // Balanced for natural question length (30-40 words)
             num_ctx: 2048     // Reduce context window for faster processing
           }
         },
@@ -941,18 +1051,28 @@ Make it sound like a real human conversation, not a formal assessment.`;
     
     switch (questionFocus.category) {
       case 'introduction':
-        questionText = `Could you tell me a bit about yourself and what interests you about ${analysis.domain}?`;
+        questionText = `Please introduce yourself and tell me about your background in ${analysis.domain}.`;
         break;
       case 'technical':
         const skill = analysis.skills?.[0] || 'programming';
-        questionText = `Can you tell me about your experience with ${skill}? What projects have you used it in?`;
+        questionText = `How have you used ${skill} in your projects?`;
         break;
       case 'project-specific':
-        const project = analysis.projects?.[0] || 'one of your projects';
-        questionText = `Can you walk me through ${project}? What was your role and what challenges did you face?`;
+        const project = analysis.projects?.[0] || 'a recent project';
+        questionText = `Walk me through ${project}. What was your role?`;
+        break;
+      case 'behavioral':
+        questionText = `Tell me about a challenging situation you faced at work.`;
+        break;
+      case 'experience':
+        const experience = analysis.workExperience?.[0] || 'your recent role';
+        questionText = `What were your main responsibilities in ${experience}?`;
+        break;
+      case 'problem-solving':
+        questionText = `Describe a complex problem you solved recently.`;
         break;
       default:
-        questionText = `What's an achievement you're particularly proud of in your career?`;
+        questionText = `What achievement are you most proud of?`;
     }
 
     return {

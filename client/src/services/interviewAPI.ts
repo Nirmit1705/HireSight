@@ -4,6 +4,7 @@ export interface InterviewFeedback {
   id: string;
   userId: string;
   interviewId: string;
+  position?: string;  // Formatted position name (e.g., "Full Stack Developer")
   // Interview Scores
   fluencyScore?: number;
   grammarScore?: number;
@@ -60,7 +61,7 @@ export interface EndInterviewResponse {
 
 class InterviewAPI {
   private getAuthHeaders() {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('authToken');
     console.log('🔴 Auth token from localStorage:', token ? 'Token exists' : 'No token found');
     console.log('🔴 Token preview:', token ? token.substring(0, 50) + '...' : 'null');
     return {
@@ -147,6 +148,34 @@ class InterviewAPI {
     }
 
     return response.json();
+  }
+
+  async getInterviewHistory(limit = 10) {
+    const response = await fetch(`${API_BASE_URL}/ai-interview/history?limit=${limit}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch interview history');
+    }
+
+    const data = await response.json();
+    return data.data.interviews;
+  }
+
+  async getInterviewById(id: string) {
+    const response = await fetch(`${API_BASE_URL}/ai-interview/interview/${id}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch interview details');
+    }
+
+    const data = await response.json();
+    return data.data.interview;
   }
 }
 

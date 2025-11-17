@@ -201,14 +201,14 @@ class AIInterviewAPI {
     return data.data;
   }
 
-  async completeContextualInterview(sessionId: string): Promise<any> {
+  async completeContextualInterview(sessionId: string, scores?: any): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/ai-interview/complete-contextual-interview`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...this.getAuthHeaders()
       },
-      body: JSON.stringify({ sessionId })
+      body: JSON.stringify({ sessionId, scores })
     });
 
     const data = await response.json();

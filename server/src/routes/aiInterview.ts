@@ -385,6 +385,20 @@ router.post('/complete-contextual-interview', authenticateToken, async (req: Aut
 });
 
 /**
+ * Get interview history for the authenticated user
+ */
+router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  await contextualController.getInterviewHistory(req, res);
+});
+
+/**
+ * Get a single interview by ID
+ */
+router.get('/interview/:id', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  await contextualController.getInterviewById(req, res);
+});
+
+/**
  * Get current contextual interview session status with conversation context
  */
 router.get('/contextual-session/:sessionId', authenticateToken, async (req: AuthenticatedRequest, res) => {

@@ -1,7 +1,8 @@
-import React from 'react';
-import { BarChart3, Target, TrendingUp, Award, AlertCircle, CheckCircle, ArrowRight, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, Target, Award, AlertCircle, CheckCircle, ArrowRight, RefreshCw } from 'lucide-react';
 import { PageType } from '../App';
 import { InterviewFeedback } from '../services/interviewAPI';
+import { aptitudeAPI } from '../services/aptitudeAPI';
 import RadarChart from './RadarChart';
 
 interface FeedbackProps {
@@ -14,6 +15,27 @@ interface FeedbackProps {
 }
 
 const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testScore, interviewScore, feedbackData }) => {
+  const [latestAptitude, setLatestAptitude] = useState<any>(null);
+
+  // Fetch latest aptitude test results
+  useEffect(() => {
+    const fetchLatestAptitude = async () => {
+      try {
+        const aptitudeHistory = await aptitudeAPI.getTestHistory();
+        if (aptitudeHistory && aptitudeHistory.length > 0) {
+          // Get the most recent aptitude test (first item, already sorted by date desc)
+          const latest = aptitudeHistory[0];
+          console.log('📚 Latest aptitude test:', latest);
+          setLatestAptitude(latest);
+        }
+      } catch (error) {
+        console.error('Error fetching aptitude history:', error);
+      }
+    };
+
+    fetchLatestAptitude();
+  }, []);
+
   // Debug logging
   console.log('Feedback component received props:', {
     position,
@@ -22,7 +44,8 @@ const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testS
     interviewScore,
     feedbackData,
     hasFeedbackData: !!feedbackData,
-    feedbackDataKeys: feedbackData ? Object.keys(feedbackData) : []
+    feedbackDataKeys: feedbackData ? Object.keys(feedbackData) : [],
+    latestAptitude
   });
 
   if (feedbackData) {
@@ -30,13 +53,33 @@ const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testS
       strengths: feedbackData.strengths,
       improvements: feedbackData.improvements,
       performanceInsights: feedbackData.performanceInsights,
-      aptitudeInsights: feedbackData.aptitudeInsights
+      aptitudeInsights: feedbackData.aptitudeInsights,
+      position: feedbackData.position,
+      hasPerformanceInsights: feedbackData.performanceInsights && feedbackData.performanceInsights.length > 0,
+      performanceInsightsLength: feedbackData.performanceInsights?.length
     });
+    
+    console.log('🔍 DEBUG Strengths array:', feedbackData.strengths);
+    if (feedbackData.strengths) {
+      feedbackData.strengths.forEach((s: string, i: number) => {
+        console.log(`Strength ${i}:`, s);
+      });
+    }
   }
+
+  // Use position from feedbackData if available, otherwise use prop
+  const displayPosition = feedbackData?.position || position;
   // Use dynamic feedback data if available, otherwise fall back to static/calculated data
   const actualInterviewScore = feedbackData?.interviewOverallScore || interviewScore;
-  const actualTestScore = feedbackData?.aptitudeOverallScore || testScore;
-  const overallScore = Math.round((actualTestScore + actualInterviewScore) / 2);
+  
+  // Use latest aptitude test score if available
+  const actualTestScore = latestAptitude?.overallScore || feedbackData?.aptitudeOverallScore || testScore;
+  
+  // Only average if both scores exist and are valid (> 0)
+  const hasAptitudeScore = actualTestScore && actualTestScore > 0;
+  const overallScore = hasAptitudeScore 
+    ? Math.round((actualTestScore + actualInterviewScore) / 2)
+    : Math.round(actualInterviewScore);
   
   // Calculate actual strengths based on all available scores (top 3 areas)
   const allScores = {
@@ -56,34 +99,93 @@ const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testS
 
   // Generate dynamic strengths from AI-generated text AND top scores
   const strengths = (() => {
+    console.log('🔍 Strengths generation debug:', {
+      hasFeedbackData: !!feedbackData,
+      hasStrengths: !!feedbackData?.strengths,
+      strengthsLength: feedbackData?.strengths?.length,
+      strengthsArray: feedbackData?.strengths,
+      allScores: allScores,
+      allScoresKeys: Object.keys(allScores),
+      allScoresLength: Object.keys(allScores).length
+    });
+    
     if (feedbackData?.strengths && feedbackData.strengths.length > 0 && Object.keys(allScores).length > 0) {
-      // Get top 3 scoring areas
-      const topScores = Object.entries(allScores)
-        .sort(([, a], [, b]) => (b || 0) - (a || 0))
-        .slice(0, 3);
-
-      // Generate descriptions that match the actual area names
-      return topScores.map(([area, score]) => {
-        // Generate contextual description based on the actual area and score
-        let description = '';
-        const roundedScore = Math.round(score || 0);
+      console.log('🎯 Processing strengths with allScores:', allScores);
+      
+      // Map LLM-generated strengths to actual database scores for consistency
+      const parsed = feedbackData.strengths.map((strengthText: string) => {
+        console.log('📝 Parsing strength text:', strengthText);
         
-        if (roundedScore >= 85) {
-          description = `Exceptional ${area.toLowerCase()} - demonstrates mastery and clear expertise`;
-        } else if (roundedScore >= 75) {
-          description = `Strong ${area.toLowerCase()} - solid foundation with good command`;
-        } else if (roundedScore >= 65) {
-          description = `Good ${area.toLowerCase()} - adequate skills with room for growth`;
-        } else {
-          description = `Developing ${area.toLowerCase()} - shows potential with focused improvement needed`;
+        // Try to extract area name from LLM text like "Grammar: 100% - Description"
+        const areaMatch = strengthText.match(/^(\w+(?:\s+\w+)?)\s*:/);
+        
+        if (areaMatch) {
+          const areaFromText = areaMatch[1];
+          const description = strengthText.split(' - ')[1] || strengthText.split(/\d+%\s*-\s*/)[1] || strengthText;
+          
+          // Map the area name to actual score from database
+          let actualScore = 85; // fallback
+          let actualArea = areaFromText;
+          
+          // Match area to actual score from allScores
+          if (areaFromText.toLowerCase().includes('grammar')) {
+            actualScore = Math.round(allScores.Grammar || 0);
+            actualArea = 'Grammar';
+          } else if (areaFromText.toLowerCase().includes('fluency')) {
+            actualScore = Math.round(allScores['Communication Fluency'] || 0);
+            actualArea = 'Fluency';
+          } else if (areaFromText.toLowerCase().includes('confidence')) {
+            actualScore = Math.round(allScores.Confidence || 0);
+            actualArea = 'Confidence';
+          } else if (areaFromText.toLowerCase().includes('vocabulary')) {
+            actualScore = Math.round(allScores.Vocabulary || 0);
+            actualArea = 'Vocabulary';
+          } else if (areaFromText.toLowerCase().includes('technical')) {
+            actualScore = Math.round(allScores['Technical Knowledge'] || 0);
+            actualArea = 'Technical Knowledge';
+          } else if (areaFromText.toLowerCase().includes('analytical')) {
+            actualScore = Math.round(allScores['Analytical Thinking'] || 0);
+            actualArea = 'Analytical Thinking';
+          }
+          
+          console.log('✅ Mapped to database score:', { area: actualArea, score: actualScore, description });
+          
+          return {
+            area: actualArea,
+            score: actualScore,
+            description: description
+          };
         }
-
+        
+        // Fallback: Try to find matching area in allScores
+        const areaName = Object.keys(allScores).find(key => 
+          strengthText.toLowerCase().includes(key.toLowerCase())
+        );
+        
+        if (areaName) {
+          console.log('⚠️ Using fallback with areaName:', areaName);
+          return {
+            area: areaName,
+            score: Math.round(allScores[areaName as keyof typeof allScores] || 0),
+            description: strengthText
+          };
+        }
+        
+        // Last resort: use top scores
+        const topScore = Object.entries(allScores)
+          .sort(([, a], [, b]) => (b || 0) - (a || 0))[0];
+        
+        console.log('❌ Using last resort with topScore:', topScore);
+        
         return {
-          area: area, // Use the actual skill area name
-          score: roundedScore,
-          description: description // Generate matching description
+          area: topScore?.[0] || 'Performance',
+          score: Math.round(topScore?.[1] || 0),
+          description: strengthText
         };
-      });
+      }).slice(0, 3);
+      
+      console.log('📊 Final parsed strengths:', parsed);
+      return parsed;
     }
     
     // Fallback to static data if no dynamic data available
@@ -116,16 +218,23 @@ const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testS
     { label: 'Vocabulary', value: feedbackData?.vocabularyScore || 77 }
   ];
 
-  // Dynamic aptitude scores
-  const aptitudeScores = [
-    { label: 'Logical Reasoning', score: feedbackData?.logicalReasoningScore || 85, color: 'green' },
-    { label: 'Quantitative Aptitude', score: feedbackData?.quantitativeScore || 72, color: 'yellow' },
-    { label: 'Verbal Ability', score: feedbackData?.verbalAbilityScore || 78, color: 'green' },
-    { label: 'Technical Knowledge', score: feedbackData?.domainKnowledgeScore || 82, color: 'green' },
-  ];
+  // Dynamic aptitude scores - only show if user took aptitude test
+  const hasAptitudeData = latestAptitude && (
+    latestAptitude.logicalReasoningScore || 
+    latestAptitude.quantitativeScore || 
+    latestAptitude.verbalAbilityScore || 
+    latestAptitude.domainKnowledgeScore
+  );
+  
+  const aptitudeScores = hasAptitudeData ? [
+    ...(latestAptitude.logicalReasoningScore ? [{ label: 'Logical Reasoning', score: latestAptitude.logicalReasoningScore, color: latestAptitude.logicalReasoningScore >= 80 ? 'green' : latestAptitude.logicalReasoningScore >= 60 ? 'yellow' : 'red' }] : []),
+    ...(latestAptitude.quantitativeScore ? [{ label: 'Quantitative Aptitude', score: latestAptitude.quantitativeScore, color: latestAptitude.quantitativeScore >= 80 ? 'green' : latestAptitude.quantitativeScore >= 60 ? 'yellow' : 'red' }] : []),
+    ...(latestAptitude.verbalAbilityScore ? [{ label: 'Verbal Ability', score: latestAptitude.verbalAbilityScore, color: latestAptitude.verbalAbilityScore >= 80 ? 'green' : latestAptitude.verbalAbilityScore >= 60 ? 'yellow' : 'red' }] : []),
+    ...(latestAptitude.domainKnowledgeScore ? [{ label: 'Technical Knowledge', score: latestAptitude.domainKnowledgeScore, color: latestAptitude.domainKnowledgeScore >= 80 ? 'green' : latestAptitude.domainKnowledgeScore >= 60 ? 'yellow' : 'red' }] : [])
+  ] : [];
 
-  // Dynamic performance insights
-  const performanceInsights = feedbackData?.performanceInsights.length ?
+  // Dynamic performance insights - use AI-generated if available
+  const performanceInsights = feedbackData?.performanceInsights && feedbackData.performanceInsights.length > 0 ?
     feedbackData.performanceInsights :
     [
       'Technical knowledge is your strongest area',
@@ -134,48 +243,59 @@ const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testS
       'Fluency and vocabulary are solid foundations'
     ];
 
-  // Dynamic aptitude insights with meaningful titles
-  const aptitudeInsights = feedbackData?.aptitudeInsights && feedbackData.aptitudeInsights.length > 0 ?
-    feedbackData.aptitudeInsights.map((insight, index) => {
-      // Generate meaningful titles based on insight content or score analysis
-      let title = 'Performance Analysis';
-      let type: 'success' | 'warning' | 'info' = 'info';
-      
-      // Smart title generation based on insight content
-      if (insight.toLowerCase().includes('excellent') || insight.toLowerCase().includes('strong')) {
-        title = 'Key Strength Identified';
-        type = 'success';
-      } else if (insight.toLowerCase().includes('improvement') || insight.toLowerCase().includes('focus') || insight.toLowerCase().includes('practice')) {
-        title = 'Growth Opportunity';
-        type = 'warning';
-      } else if (insight.toLowerCase().includes('logical') || insight.toLowerCase().includes('reasoning')) {
-        title = 'Analytical Skills';
-        type = 'success';
-      } else if (insight.toLowerCase().includes('quantitative') || insight.toLowerCase().includes('math')) {
-        title = 'Mathematical Aptitude';
-        type = 'warning';
-      } else if (insight.toLowerCase().includes('verbal') || insight.toLowerCase().includes('communication')) {
-        title = 'Communication Skills';
-        type = 'info';
-      } else if (insight.toLowerCase().includes('technical') || insight.toLowerCase().includes('domain')) {
-        title = 'Technical Proficiency';
-        type = 'success';
-      } else if (insight.toLowerCase().includes('overall') || insight.toLowerCase().includes('ready')) {
-        title = 'Overall Assessment';
-        type = 'info';
-      }
-      
-      return {
-        type,
-        title,
-        description: insight
-      };
-    }) :
-    [
-      { type: 'success' as const, title: 'Strong Logical Thinking', description: 'Excellent performance in logical reasoning shows strong analytical skills.' },
-      { type: 'warning' as const, title: 'Math Skills Need Work', description: 'Focus on quantitative problems and practice speed calculation techniques.' },
-      { type: 'info' as const, title: 'Well-Rounded Profile', description: `Good balance across verbal and technical areas. Ready for most ${position} roles.` }
-    ];
+  // Dynamic aptitude insights based on actual test scores
+  const aptitudeInsights = latestAptitude ? (() => {
+    const insights: Array<{ type: 'success' | 'warning' | 'info'; title: string; description: string }> = [];
+    
+    // Find strongest area
+    const scores = {
+      'Logical Reasoning': latestAptitude.logicalReasoningScore || 0,
+      'Quantitative Aptitude': latestAptitude.quantitativeScore || 0,
+      'Verbal Ability': latestAptitude.verbalAbilityScore || 0,
+      'Technical Knowledge': latestAptitude.domainKnowledgeScore || 0
+    };
+    
+    const maxScore = Math.max(...Object.values(scores));
+    const minScore = Math.min(...Object.values(scores).filter(s => s > 0));
+    const strongestArea = Object.entries(scores).find(([_, score]) => score === maxScore)?.[0];
+    const weakestArea = Object.entries(scores).find(([_, score]) => score === minScore)?.[0];
+    
+    // Add strength insight
+    if (strongestArea && maxScore >= 70) {
+      insights.push({
+        type: maxScore >= 85 ? 'success' : 'info',
+        title: `Strong ${strongestArea}`,
+        description: `${maxScore >= 85 ? 'Excellent' : 'Good'} performance in ${strongestArea.toLowerCase()} (${maxScore}%). ${maxScore >= 85 ? 'This is a key strength that sets you apart.' : 'This is a solid foundation to build upon.'}`
+      });
+    }
+    
+    // Add weakness insight
+    if (weakestArea && minScore < 70 && weakestArea !== strongestArea) {
+      insights.push({
+        type: 'warning',
+        title: `Improve ${weakestArea}`,
+        description: `Focus on ${weakestArea.toLowerCase()} (${minScore}%). ${minScore < 50 ? 'Significant improvement needed - consider focused practice sessions.' : 'Some practice will help strengthen this area.'}`
+      });
+    }
+    
+    // Add overall assessment
+    const overallScore = latestAptitude.overallScore || 0;
+    insights.push({
+      type: overallScore >= 80 ? 'success' : overallScore >= 60 ? 'info' : 'warning',
+      title: 'Overall Assessment',
+      description: `Overall aptitude score of ${overallScore}%. ${
+        overallScore >= 80 ? `Excellent readiness for ${displayPosition} roles with strong all-around capabilities.` :
+        overallScore >= 60 ? `Good foundation for ${displayPosition} roles. Focus on weak areas to stand out.` :
+        `More preparation needed for ${displayPosition} roles. Dedicate time to strengthen fundamentals.`
+      }`
+    });
+    
+    return insights;
+  })() : [
+    { type: 'success' as const, title: 'Strong Logical Thinking', description: 'Excellent performance in logical reasoning shows strong analytical skills.' },
+    { type: 'warning' as const, title: 'Math Skills Need Work', description: 'Focus on quantitative problems and practice speed calculation techniques.' },
+    { type: 'info' as const, title: 'Well-Rounded Profile', description: `Good balance across verbal and technical areas. Ready for most ${displayPosition} roles.` }
+  ];
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -207,7 +327,7 @@ const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testS
             <Award className="h-16 w-16 text-black mx-auto mb-4" />
             <h1 className="text-4xl font-bold mb-4">Interview Feedback</h1>
             <p className="text-xl text-gray-600">
-              Comprehensive analysis of your {position} interview performance
+              Comprehensive analysis of your {displayPosition} interview performance
             </p>
           </div>
 
@@ -281,57 +401,58 @@ const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testS
             </div>
           </div>
 
-          {/* Aptitude Analytics */}
-          <div className="mt-8 bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">
-            <div className="flex items-center space-x-2 mb-6">
-              <BarChart3 className="h-6 w-6 text-black" />
-              <h2 className="text-2xl font-bold">Aptitude Analytics</h2>
-            </div>
-            
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <h3 className="font-semibold mb-4">Subject Performance</h3>
-                <div className="space-y-3">
-                  {aptitudeScores.map((score, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <span className="text-gray-600">{score.label}</span>
-                      <span className={`font-medium ${
-                        score.score >= 80 ? 'text-green-600' : 
-                        score.score >= 70 ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        {Math.round(score.score)}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
+          {/* Aptitude Analytics - Only show if user took aptitude test */}
+          {hasAptitudeData && aptitudeScores.length > 0 && (
+            <div className="mt-8 bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">
+              <div className="flex items-center space-x-2 mb-6">
+                <BarChart3 className="h-6 w-6 text-black" />
+                <h2 className="text-2xl font-bold">Aptitude Analytics</h2>
               </div>
               
-              <div>
-                <h3 className="font-semibold mb-4">Aptitude Insights</h3>
-                <div className="space-y-3">
-                  {aptitudeInsights.map((insight, index) => (
-                    <div key={index} className={`border rounded-lg p-3 ${
-                      insight.type === 'success' ? 'bg-green-50 border-green-200' :
-                      insight.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
-                      'bg-blue-50 border-blue-200'
-                    }`}>
-                      <div className="flex items-center mb-1">
-                        {insight.type === 'success' ? <CheckCircle className="h-4 w-4 text-green-600 mr-2" /> :
-                         insight.type === 'warning' ? <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" /> :
-                         <Target className="h-4 w-4 text-blue-600 mr-2" />}
+              <div className="grid md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="font-semibold mb-4">Subject Performance</h3>
+                  <div className="space-y-3">
+                    {aptitudeScores.map((score, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <span className="text-gray-600">{score.label}</span>
                         <span className={`font-medium ${
-                          insight.type === 'success' ? 'text-green-800' :
-                          insight.type === 'warning' ? 'text-yellow-800' :
-                          'text-blue-800'
+                          score.score >= 80 ? 'text-green-600' : 
+                          score.score >= 70 ? 'text-yellow-600' : 'text-red-600'
                         }`}>
-                          {insight.title}
+                          {Math.round(score.score)}%
                         </span>
                       </div>
-                      <p className={`text-sm ${
-                        insight.type === 'success' ? 'text-green-700' :
-                        insight.type === 'warning' ? 'text-yellow-700' :
-                        'text-blue-700'
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold mb-4">Aptitude Insights</h3>
+                  <div className="space-y-3">
+                    {aptitudeInsights.map((insight, index) => (
+                      <div key={index} className={`border rounded-lg p-3 ${
+                        insight.type === 'success' ? 'bg-green-50 border-green-200' :
+                        insight.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+                        'bg-blue-50 border-blue-200'
                       }`}>
+                        <div className="flex items-center mb-1">
+                          {insight.type === 'success' ? <CheckCircle className="h-4 w-4 text-green-600 mr-2" /> :
+                           insight.type === 'warning' ? <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" /> :
+                           <Target className="h-4 w-4 text-blue-600 mr-2" />}
+                          <span className={`font-medium ${
+                            insight.type === 'success' ? 'text-green-800' :
+                            insight.type === 'warning' ? 'text-yellow-800' :
+                            'text-blue-800'
+                          }`}>
+                            {insight.title}
+                          </span>
+                        </div>
+                        <p className={`text-sm ${
+                          insight.type === 'success' ? 'text-green-700' :
+                          insight.type === 'warning' ? 'text-yellow-700' :
+                          'text-blue-700'
+                        }`}>
                         {insight.description}
                       </p>
                     </div>
@@ -339,7 +460,8 @@ const Feedback: React.FC<FeedbackProps> = ({ onNavigate, position, domain, testS
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          )}
 
           {/* Performance Radar Chart */}
           <div className="mt-8 bg-white border-2 border-gray-200 rounded-xl p-6 shadow-lg">

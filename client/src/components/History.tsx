@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Clock, FileText, Video, BarChart3, Calendar, Trophy, TrendingUp, Loader } from 'lucide-react';
 import { PageType } from '../App';
 import { aptitudeAPI } from '../services/aptitudeAPI';
+import { interviewAPI } from '../services/interviewAPI';
 
 interface HistoryProps {
   onNavigate: (page: PageType, historyId?: string) => void;
@@ -28,6 +29,13 @@ const History: React.FC<HistoryProps> = ({ onNavigate }) => {
   useEffect(() => {
     // Clear any old localStorage history data since we're now using backend
     localStorage.removeItem('hiresight_history');
+    // Also clear any other potential cached interview data
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes('interview') || key.includes('history')) {
+        console.log('Clearing cached data:', key);
+        localStorage.removeItem(key);
+      }
+    });
     loadHistory();
   }, []);
 
@@ -36,10 +44,12 @@ const History: React.FC<HistoryProps> = ({ onNavigate }) => {
       setLoading(true);
       setError(null);
       
+      console.log('=== LOADING HISTORY ===');
+      
       // Load aptitude test history from backend
       console.log('Fetching aptitude history...');
       const aptitudeHistory = await aptitudeAPI.getTestHistory();
-      console.log('Aptitude history received:', aptitudeHistory);
+      console.log('📚 Raw aptitude history from API:', aptitudeHistory);
       
       // Convert backend format to frontend format
       const formattedAptitudeHistory: HistoryItem[] = aptitudeHistory.map(test => ({
@@ -52,63 +62,51 @@ const History: React.FC<HistoryProps> = ({ onNavigate }) => {
         status: 'completed' as 'completed' | 'in-progress'
       }));
 
-      console.log('Formatted aptitude history:', formattedAptitudeHistory);
+      console.log('✅ Formatted aptitude history:', formattedAptitudeHistory);
 
-      // For now, we'll only show aptitude history from backend
-      // Interview history can be added later when that API is ready
-      const mockInterviewHistory: HistoryItem[] = [
-        {
-          id: '1',
-          type: 'interview',
-          date: '2024-01-28',
-          score: 76,
-          position: 'Frontend Developer',
-          domain: 'React.js',
-          duration: '25:30',
-          status: 'completed'
-        },
-        {
-          id: '3',
-          type: 'interview',
-          date: '2024-01-22',
-          score: 68,
-          position: 'Backend Developer',
-          domain: 'Node.js',
-          duration: '22:15',
-          status: 'completed'
-        }
-      ];
+      // Load interview history from backend
+      console.log('Fetching interview history...');
+      const interviewHistory = await interviewAPI.getInterviewHistory();
+      console.log('🎯 Raw interview history from API:', interviewHistory);
 
-      const allHistory = [...formattedAptitudeHistory, ...mockInterviewHistory];
-      console.log('All history items:', allHistory);
+      const formattedInterviewHistory: HistoryItem[] = interviewHistory.map((interview: any) => {
+        console.log('Processing interview:', {
+          id: interview.id,
+          overallScore: interview.overallScore,
+          duration: interview.duration,
+          completedAt: interview.completedAt,
+          position: interview.position
+        });
+        
+        // Format duration from minutes to MM:SS
+        const durationInMinutes = interview.duration || 0;
+        const mins = Math.floor(durationInMinutes);
+        const secs = Math.floor((durationInMinutes - mins) * 60);
+        const formattedDuration = `${mins}:${secs.toString().padStart(2, '0')}`;
+        
+        return {
+          id: interview.id,
+          type: 'interview' as const,
+          date: interview.completedAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+          score: Math.round(interview.overallScore || 0),
+          position: interview.position,
+          domain: interview.domain,
+          duration: formattedDuration,
+          status: 'completed' as 'completed' | 'in-progress'
+        };
+      });
+
+      console.log('✅ Formatted interview history:', formattedInterviewHistory);
+
+      const allHistory = [...formattedAptitudeHistory, ...formattedInterviewHistory];
+      console.log('📊 All history items to display:', allHistory);
+      console.log('=== HISTORY LOADED ===');
+      
       setHistoryItems(allHistory);
     } catch (err) {
-      console.error('Error loading history:', err);
-      setError('Failed to load test history');
-      // Fallback to mock data if API fails
-      const mockHistory: HistoryItem[] = [
-        {
-          id: '1',
-          type: 'interview',
-          date: '2024-01-28',
-          score: 76,
-          position: 'Frontend Developer',
-          domain: 'React.js',
-          duration: '25:30',
-          status: 'completed'
-        },
-        {
-          id: '3',
-          type: 'interview',
-          date: '2024-01-22',
-          score: 68,
-          position: 'Backend Developer',
-          domain: 'Node.js',
-          duration: '22:15',
-          status: 'completed'
-        }
-      ];
-      setHistoryItems(mockHistory);
+      console.error('❌ Error loading history:', err);
+      setError('Failed to load history. Please try again later.');
+      setHistoryItems([]); // Set empty array instead of mock data
     } finally {
       setLoading(false);
     }

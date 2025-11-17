@@ -5,6 +5,7 @@ import fs from 'fs';
 import pdfParse from 'pdf-parse';
 import pdf2pic from 'pdf2pic';
 import AdmZip from 'adm-zip';
+import { LLMResumeAnalyzer, LLMCategorizedResume } from './llmResumeAnalyzer';
 
 export interface ProjectDetail {
   name: string;
@@ -29,9 +30,11 @@ export interface ResumeAnalysis {
 
 export class ResumeProcessingService {
   private worker: any = null;
+  private llmAnalyzer: LLMResumeAnalyzer;
 
   constructor() {
     this.initializeOCR();
+    this.llmAnalyzer = new LLMResumeAnalyzer();
   }
 
   private async initializeOCR() {
@@ -198,9 +201,9 @@ export class ResumeProcessingService {
   }
 
   /**
-   * Analyze resume text and extract relevant information
+   * Analyze resume text and extract relevant information with LLM enhancement
    */
-  analyzeResumeText(text: string): ResumeAnalysis {
+  async analyzeResumeText(text: string): Promise<ResumeAnalysis> {
     const cleanText = text.toLowerCase();
     
     // Debug: Log the extracted text for verification
@@ -214,55 +217,85 @@ export class ResumeProcessingService {
     }
     console.log('=== END EXTRACTED TEXT ===');
     
-    // Extract experience
+    // First, use traditional parsing for initial extraction
     const experience = this.extractExperience(cleanText);
+    const domain = this.determineDomain([], []); // Will be updated after LLM analysis
     
-    // Extract skills and keywords
-    const skills = this.extractSkills(cleanText);
-    const keywords = this.extractKeywords(cleanText, skills);
+    // Use LLM to categorize resume sections correctly
+    console.log('🤖 Starting LLM-enhanced categorization...');
+    let llmCategorized: LLMCategorizedResume | null = null;
+    try {
+      llmCategorized = await this.llmAnalyzer.categorizeResume(text);
+    } catch (error) {
+      console.log('⚠️ LLM categorization failed, falling back to traditional parsing');
+    }
     
-    // Extract projects and work experience
-    const projects = this.extractProjects(text);
-    const workExperience = this.extractWorkExperience(text);
-    const achievements = this.extractAchievements(text);
-    const technologies = this.extractTechnologies(cleanText);
+    // Extract skills from both traditional and LLM methods
+    const traditionalSkills = this.extractSkills(cleanText);
+    const llmSkills = llmCategorized ? [
+      ...llmCategorized.skills.technical,
+      ...llmCategorized.skills.tools
+    ] : [];
     
-    // Determine domain
-    const domain = this.determineDomain(skills, keywords);
+    // Merge and deduplicate skills
+    const allSkills = Array.from(new Set([...traditionalSkills, ...llmSkills]));
+    const keywords = this.extractKeywords(cleanText, allSkills);
     
-    // Extract education
-    const education = this.extractEducation(cleanText);
+    // Use LLM-categorized data if available, otherwise fall back to traditional
+    const projects = llmCategorized && llmCategorized.projects.length > 0
+      ? llmCategorized.projects.map(p => p.name)
+      : this.extractProjects(text);
+      
+    const workExperience = llmCategorized && llmCategorized.workExperience.length > 0
+      ? llmCategorized.workExperience.map(w => `${w.position} at ${w.company}`)
+      : this.extractWorkExperience(text);
+      
+    const achievements = llmCategorized && llmCategorized.achievements.length > 0
+      ? llmCategorized.achievements
+      : this.extractAchievements(text);
+      
+    const education = llmCategorized && llmCategorized.education.length > 0
+      ? llmCategorized.education.map(e => `${e.degree} from ${e.institution}`)
+      : this.extractEducation(cleanText);
+      
+    const certifications = llmCategorized && llmCategorized.certifications.length > 0
+      ? llmCategorized.certifications
+      : this.extractCertifications(cleanText);
     
-    // Extract certifications
-    const certifications = this.extractCertifications(cleanText);
+    // Extract detailed project information
+    const projectDetails: ProjectDetail[] = llmCategorized && llmCategorized.projects.length > 0
+      ? llmCategorized.projects.map(p => ({
+          name: p.name,
+          technologies: p.technologies,
+          description: p.description
+        }))
+      : this.extractProjectDetails(text);
+    
+    // Extract technologies
+    const technologies = llmCategorized && llmCategorized.skills.tools.length > 0
+      ? llmCategorized.skills.tools
+      : this.extractTechnologies(cleanText);
+    
+    // Determine domain based on skills
+    const finalDomain = this.determineDomain(allSkills, keywords);
 
-    // Debug: Log found skills
-    console.log('=== FOUND SKILLS ===');
-    console.log(skills);
-    console.log('=== FOUND PROJECTS ===');
-    console.log(projects);
-    console.log('=== FOUND WORK EXPERIENCE ===');
-    console.log(workExperience.slice(0, 3));
-    console.log('=== FOUND ACHIEVEMENTS ===');
-    console.log(achievements.slice(0, 3));
-    console.log('=== FINAL ANALYSIS SUMMARY ===');
-    console.log(`- Experience Level: ${experience}`);
-    console.log(`- Domain: ${domain}`);
-    console.log(`- Skills Count: ${skills.length}`);
+    // Debug: Log categorization results
+    console.log('=== LLM-ENHANCED ANALYSIS RESULTS ===');
+    console.log(`- LLM Used: ${llmCategorized ? 'Yes' : 'No (fallback to traditional)'}`);
+    console.log(`- Skills Count: ${allSkills.length} (Traditional: ${traditionalSkills.length}, LLM: ${llmSkills.length})`);
     console.log(`- Projects Count: ${projects.length}`);
     console.log(`- Work Experience Count: ${workExperience.length}`);
     console.log(`- Achievements Count: ${achievements.length}`);
+    console.log(`- Experience Level: ${experience}`);
+    console.log(`- Domain: ${finalDomain}`);
     console.log('=== END ANALYSIS ===');
-
-    // Extract detailed project information with technologies
-    const projectDetails = this.extractProjectDetails(text);
 
     return {
       extractedText: text,
       keywords,
-      skills,
+      skills: allSkills,
       experience,
-      domain,
+      domain: finalDomain,
       education,
       certifications,
       projects,

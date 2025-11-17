@@ -3,6 +3,7 @@ import { BarChart3, Target, Award, AlertCircle, CheckCircle, ArrowLeft, ArrowRig
 import { PageType } from '../App';
 import RadarChart from './RadarChart';
 import { aptitudeAPI } from '../services/aptitudeAPI';
+import { interviewAPI } from '../services/interviewAPI';
 
 interface HistoryDetailProps {
   onNavigate: (page: PageType) => void;
@@ -26,6 +27,25 @@ interface HistoryItem {
   quantitativeScore?: number;
   verbalAbilityScore?: number;
   logicalReasoningScore?: number;
+  // Interview-specific scores
+  fluencyScore?: number;
+  grammarScore?: number;
+  confidenceScore?: number;
+  technicalKnowledgeScore?: number;
+  vocabularyScore?: number;
+  analyticalThinkingScore?: number;
+  // Feedback data
+  feedback?: {
+    strengths?: string[];
+    improvements?: Array<{
+      id?: string;
+      area: string;
+      priority: string;
+      description?: string;
+    }>;
+    performanceInsights?: string[];
+    position?: string;
+  };
   detailedResults?: Array<{
     question: string;
     options: string[];
@@ -111,38 +131,49 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
         console.log('Not an aptitude test or error fetching aptitude details:', aptitudeError);
       }
 
-      // If not found in aptitude history, check if it's an interview (mock data)
-      const mockInterviewHistory = [
-        {
-          id: '1',
-          type: 'interview' as const,
-          date: '2024-01-28',
-          score: 76,
-          position: 'Frontend Developer',
-          domain: 'React.js',
-          duration: '25:30',
-          status: 'completed' as const
-        },
-        {
-          id: '3',
-          type: 'interview' as const,
-          date: '2024-01-22',
-          score: 68,
-          position: 'Backend Developer',
-          domain: 'Node.js',
-          duration: '22:15',
-          status: 'completed' as const
+      // Try to fetch interview details from backend
+      try {
+        const interviewData = await interviewAPI.getInterviewById(historyId);
+        
+        if (interviewData) {
+          console.log('✅ Loaded interview with feedback:', interviewData);
+          
+          // Fetch latest aptitude score separately
+          let latestAptitudeScore = 0;
+          try {
+            const aptitudeHistory = await aptitudeAPI.getTestHistory();
+            if (aptitudeHistory && aptitudeHistory.length > 0) {
+              latestAptitudeScore = Math.round(aptitudeHistory[0].overallScore || 0);
+            }
+          } catch (aptError) {
+            console.log('No aptitude history found:', aptError);
+          }
+          
+          setHistoryItem({
+            id: interviewData.id,
+            type: 'interview',
+            date: interviewData.completedAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+            score: Math.round(interviewData.overallScore || 0),
+            position: interviewData.position,
+            domain: interviewData.domain,
+            duration: interviewData.duration ? `${interviewData.duration}:00` : '0:00',
+            status: 'completed',
+            testScore: latestAptitudeScore,
+            interviewScore: Math.round(interviewData.overallScore || 0),
+            // Include all interview scores
+            fluencyScore: interviewData.fluencyScore,
+            grammarScore: interviewData.grammarScore,
+            confidenceScore: interviewData.confidenceScore,
+            technicalKnowledgeScore: interviewData.technicalKnowledgeScore,
+            vocabularyScore: interviewData.vocabularyScore,
+            analyticalThinkingScore: interviewData.analyticalThinkingScore,
+            // Include feedback data if available
+            feedback: interviewData.feedback || undefined
+          });
+          return;
         }
-      ];
-
-      const interviewItem = mockInterviewHistory.find(item => item.id === historyId);
-      if (interviewItem) {
-        setHistoryItem({
-          ...interviewItem,
-          testScore: Math.floor(Math.random() * 20) + 70,
-          interviewScore: interviewItem.score
-        });
-        return;
+      } catch (interviewError) {
+        console.log('Not an interview or error fetching interview details:', interviewError);
       }
 
       // If not found anywhere, history item remains null
@@ -409,24 +440,99 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
     ? Math.round(((historyItem.testScore || 0) + historyItem.score) / 2)
     : historyItem.score;
   
-  const strengths = [
-    { area: 'Technical Knowledge', score: 85, description: 'Strong understanding of core concepts' },
-    { area: 'Communication', score: 78, description: 'Clear and articulate responses' },
-    { area: 'Problem Solving', score: 82, description: 'Good analytical approach' },
-  ];
+  // Build scores object for interview items
+  const interviewScores = historyItem.type === 'interview' ? {
+    'Grammar': historyItem.grammarScore || 0,
+    'Fluency': historyItem.fluencyScore || 0,
+    'Confidence': historyItem.confidenceScore || 0,
+    'Vocabulary': historyItem.vocabularyScore || 0,
+    'Technical Knowledge': historyItem.technicalKnowledgeScore || 0,
+    'Analytical Thinking': historyItem.analyticalThinkingScore || 0
+  } : {};
+  
+  // Use actual feedback data if available, map to database scores for consistency
+  const strengths = historyItem.feedback?.strengths && historyItem.feedback.strengths.length > 0
+    ? historyItem.feedback.strengths.map((strengthText, index) => {
+        // Extract area name from LLM text like "Grammar: 100% - Description"
+        const areaMatch = strengthText.match(/^(\w+(?:\s+\w+)?)\s*:/);
+        
+        if (areaMatch && historyItem.type === 'interview') {
+          const areaFromText = areaMatch[1];
+          const description = strengthText.split(' - ')[1] || strengthText.split(/\d+%\s*-\s*/)[1] || strengthText;
+          
+          // Map to actual database score
+          let actualScore = 85;
+          let actualArea = areaFromText;
+          
+          if (areaFromText.toLowerCase().includes('grammar')) {
+            actualScore = Math.round(interviewScores.Grammar);
+            actualArea = 'Grammar';
+          } else if (areaFromText.toLowerCase().includes('fluency')) {
+            actualScore = Math.round(interviewScores.Fluency);
+            actualArea = 'Fluency';
+          } else if (areaFromText.toLowerCase().includes('confidence')) {
+            actualScore = Math.round(interviewScores.Confidence);
+            actualArea = 'Confidence';
+          } else if (areaFromText.toLowerCase().includes('vocabulary')) {
+            actualScore = Math.round(interviewScores.Vocabulary);
+            actualArea = 'Vocabulary';
+          } else if (areaFromText.toLowerCase().includes('technical')) {
+            actualScore = Math.round(interviewScores['Technical Knowledge']);
+            actualArea = 'Technical Knowledge';
+          } else if (areaFromText.toLowerCase().includes('analytical')) {
+            actualScore = Math.round(interviewScores['Analytical Thinking']);
+            actualArea = 'Analytical Thinking';
+          }
+          
+          return {
+            area: actualArea,
+            score: actualScore,
+            description: description
+          };
+        }
+        
+        // Fallback if pattern doesn't match
+        return {
+          area: `Strength ${index + 1}`,
+          score: 85,
+          description: strengthText
+        };
+      })
+    : [
+        { area: 'Technical Knowledge', score: 85, description: 'Strong understanding of core concepts' },
+        { area: 'Communication', score: 78, description: 'Clear and articulate responses' },
+        { area: 'Problem Solving', score: 82, description: 'Good analytical approach' },
+      ];
 
-  const improvements = [
-    { area: 'Confidence', severity: 'medium', description: 'Work on speaking with more authority' },
-    { area: 'Clarity', severity: 'low', description: 'Occasionally unclear in explanations' },
-    { area: 'Technical Depth', severity: 'high', description: 'Need more detailed technical examples' },
-  ];
+  // Use actual feedback improvements if available
+  const improvements = historyItem.feedback?.improvements && historyItem.feedback.improvements.length > 0
+    ? historyItem.feedback.improvements.map(improvement => ({
+        area: improvement.area,
+        severity: improvement.priority.toLowerCase() as 'high' | 'medium' | 'low',
+        description: improvement.description || `Focus on improving your ${improvement.area.toLowerCase()}`
+      }))
+    : [
+        { area: 'Confidence', severity: 'medium' as const, description: 'Work on speaking with more authority' },
+        { area: 'Clarity', severity: 'low' as const, description: 'Occasionally unclear in explanations' },
+        { area: 'Technical Depth', severity: 'high' as const, description: 'Need more detailed technical examples' },
+      ];
 
+  // Use actual performance insights if available
+  const performanceInsights = historyItem.feedback?.performanceInsights && historyItem.feedback.performanceInsights.length > 0
+    ? historyItem.feedback.performanceInsights
+    : [
+        'Technical knowledge is your strongest area',
+        'Focus on building confidence in delivery',
+        'Continue to develop your communication skills'
+      ];
+
+  // Use actual scores for radar chart if available
   const radarData = [
-    { label: 'Fluency', value: 78 },
-    { label: 'Grammar', value: 75 },
-    { label: 'Confidence', value: 70 },
-    { label: 'Technical Knowledge', value: 85 },
-    { label: 'Vocabulary', value: 77 }
+    { label: 'Fluency', value: historyItem.fluencyScore || 78 },
+    { label: 'Grammar', value: historyItem.grammarScore || 75 },
+    { label: 'Confidence', value: historyItem.confidenceScore || 70 },
+    { label: 'Technical Knowledge', value: historyItem.technicalKnowledgeScore || 85 },
+    { label: 'Vocabulary', value: historyItem.vocabularyScore || 77 }
   ];
 
   return (
@@ -627,10 +733,9 @@ const HistoryDetail: React.FC<HistoryDetailProps> = ({ onNavigate, historyId }) 
                 <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <h4 className="font-semibold text-blue-900 mb-2">Performance Insights</h4>
                   <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Technical knowledge is your strongest area</li>
-                    <li>• Focus on building confidence in delivery</li>
-                    <li>• Grammar improvement will enhance clarity</li>
-                    <li>• Fluency and vocabulary are solid foundations</li>
+                    {performanceInsights.map((insight, index) => (
+                      <li key={index}>• {insight}</li>
+                    ))}
                   </ul>
                 </div>
               </div>

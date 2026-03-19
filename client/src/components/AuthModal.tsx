@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -101,7 +103,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, initial
     });
 
     try {
-      const endpoint = mode === 'signin' ? '/api/auth/signin' : '/api/auth/signup';
+      const endpoint = mode === 'signin' ? '/auth/signin' : '/auth/signup';
       const payload = mode === 'signin' 
         ? { email: formData.email, password: formData.password }
         : { 
@@ -111,10 +113,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, initial
             confirmPassword: formData.confirmPassword
           };
 
-      console.log('Sending request to:', `http://localhost:5000${endpoint}`);
+      console.log('Sending request to:', `${API_BASE_URL}${endpoint}`);
       console.log('Payload:', payload);
 
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,7 +196,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin, initial
 
   const handleGoogleAuth = () => {
     // For now, let's use redirect instead of popup to avoid popup blocker issues
-    const googleAuthUrl = 'http://localhost:5000/api/auth/google';
+    const googleAuthUrl = `${API_BASE_URL}/auth/google`;
     console.log('AuthModal: Redirecting to Google auth:', googleAuthUrl);
     
     // Store that we're doing Google auth so we can handle the return properly

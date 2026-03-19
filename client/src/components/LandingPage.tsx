@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ArrowRight, CheckCircle, FileText, Video, BarChart3, Star, Users, Target } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowRight, CheckCircle, Video } from 'lucide-react';
 import { PageType } from '../App';
 import AuthModal from './AuthModal';
 
@@ -16,7 +16,7 @@ interface Point {
   z: number;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onLogin }) => {
+const LandingPage = ({ onNavigate, onLogin }: LandingPageProps) => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const canvasRef = useRef<HTMLCanvasElement>(null);

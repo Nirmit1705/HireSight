@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { PasswordUtils, TokenUtils, ValidationUtils } from '../utils/authUtils';
 import { SignUpData, SignInData, AuthTokens, ApiResponse } from '../types/authTypes';
@@ -41,18 +42,6 @@ export class AuthService {
         };
       }
 
-      // Check if user already exists
-      const existingUser = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-      });
-
-      if (existingUser) {
-        return {
-          success: false,
-          message: 'User with this email already exists',
-        };
-      }
-
       // Hash password
       const hashedPassword = await PasswordUtils.hashPassword(password);
 
@@ -92,6 +81,13 @@ export class AuthService {
         },
       };
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return {
+          success: false,
+          message: 'User with this email already exists',
+        };
+      }
+
       console.error('SignUp error:', error);
       return {
         success: false,
